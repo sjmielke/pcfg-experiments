@@ -1,10 +1,9 @@
 use std::collections::HashMap;
 use std::f64; // log and exp
-use std::fs::File;
-use std::io::prelude::*;
 
-extern crate json;
-extern crate fnv;
+extern crate ptb_reader;
+
+use ptb_reader::PTBTree;
 
 fn reverse_bijection<V: Clone + Eq + std::hash::Hash, K: Clone + Eq + std::hash::Hash>(indict: &HashMap<K, V>) -> HashMap<V, K> {
     let mut outdict: HashMap<V, K> = HashMap::new();
@@ -354,56 +353,69 @@ fn bananaset() -> ((Vec<Rule>, HashMap<usize, String>), Vec<String>) {
 }
 
 fn ptbset() -> ((Vec<Rule>, HashMap<usize, String>), Vec<String>) {
-    let mut f = File::open("/tmp/trees.json").unwrap();
-    let mut s = String::new();
-    f.read_to_string(&mut s).unwrap();
-    
-    let parsed = json::parse(&s).unwrap();
+    let all_trees = ptb_reader::parse_ptb_sample_dir("/home/sjm/documents/Uni/penn-treebank-sample/treebank/combined/");
     
     let mut rulelist: Vec<Rule> = Vec::new();
     let mut rev_ntdict: HashMap<String, usize> = HashMap::new();
     
-    fn getrules(t: &json::JsonValue, rulelist: &mut Vec<Rule>, rev_ntdict: &mut HashMap<String, usize>) {
-        let l = t["label"].as_str().unwrap();
-        let mut cids: Vec<usize> = Vec::new();
-        // preterminal case
-        if t["children"][0]["children"][0].is_null() {
-            let s = t["children"][0]["label"].as_str().unwrap().to_string();
-            rulelist.push(Rule { lhs: treat_nt(rev_ntdict, l), rhs: RHS::Terminal(s) });
-        }
-        // other case: NTs
-        else {
-            for c in t["children"].members() {
-                let s = c["label"].as_str().unwrap();
-                cids.push(treat_nt(rev_ntdict, s));
-                getrules(c, rulelist, rev_ntdict);
+    fn getrules(t: &PTBTree, rulelist: &mut Vec<Rule>, rev_ntdict: &mut HashMap<String, usize>) {
+        match t {
+            &PTBTree::InnerNode { ref label, ref children } => {
+                let lhs = treat_nt(rev_ntdict, &label);
+                // Terminal case
+                if children.len() == 1 {
+                    if let PTBTree::TerminalNode { ref label } = children[0] {
+                        rulelist.push(Rule { lhs: lhs, rhs: RHS::Terminal(label.to_string()) });
+                        return
+                    }
+                }
+                // Other (NT) case
+                let mut child_ids: Vec<usize> = Vec::new();
+                for c in children {
+                    let s = match c {
+                        &PTBTree::InnerNode { ref label, children: _ } => label,
+                        &PTBTree::TerminalNode { ref label } => label
+                    };
+                    child_ids.push(treat_nt(rev_ntdict, s));
+                    getrules(c, rulelist, rev_ntdict);
+                }
+                let r = Rule { lhs: lhs, rhs: RHS::NTs(child_ids) };
+                rulelist.push(r);
             }
-            rulelist.push(Rule { lhs: treat_nt(rev_ntdict, l), rhs: RHS::NTs(cids) });
+            _ => {
+                panic!("Unusable tree!")
+            }
         }
     }
     
-    for t in parsed.members() {
-        getrules(t, &mut rulelist, &mut rev_ntdict);
+    for t in &all_trees[0..2000] {
+        //println!("{}", t);
+        getrules(&t, &mut rulelist, &mut rev_ntdict);
     }
+    
+    //println!("From {} trees: NTs: {}, Rules: {}", &all_trees[0..2000].len(), rev_ntdict.len(), rulelist.len());
     
     let ntdict = reverse_bijection(&rev_ntdict);
     
     // load test sents
-    let mut f = File::open("/tmp/test.txt").unwrap();
-    let mut s = String::new();
-    f.read_to_string(&mut s).unwrap();
-    let testsents: Vec<&str> = s.lines().collect();
-    let testsents: Vec<String> = testsents.iter().map(|s| s.to_string()).collect();
+    
+    let mut testsents: Vec<String> = Vec::new();
+    for t in &all_trees[2000..2100] {
+        let s: String = From::from(t.clone()); // yield
+        testsents.push(s)
+    }
     
     ((rulelist, ntdict), testsents)
 }
 
 fn main() {
-    let ((rulelist, ntdict), testsents) = ptbset();
-    let rules = normalize_grammar(rulelist.iter());
-    //print_grammar(&rules, &ntdict);
-    println!("Now CNFing!");
-    let (cnf_rules, cnf_ntdict) = cnfize_grammar(&rules, &ntdict);
+    let ((cnf_rules, cnf_ntdict), testsents) = {
+        let ((rulelist, ntdict), testsents) = ptbset();
+        let rules = normalize_grammar(rulelist.iter());
+        //print_grammar(&rules, &ntdict);
+        println!("Now CNFing!");
+        (cnfize_grammar(&rules, &ntdict), testsents)
+    };
     //println!("What came out?");
     //print_grammar(&cnf_rules, &cnf_ntdict);
     //println!("try printing original again");
