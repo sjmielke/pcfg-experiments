@@ -51,35 +51,35 @@ enum ParseTree<'a> {
 }
 
 fn parsetree2ptbtree(ntdict: &HashMap<usize, String>, t: &ParseTree) -> PTBTree {
-    match t {
-        &ParseTree::TerminalNode { label } => {
+    match *t {
+        ParseTree::TerminalNode { label } => {
             PTBTree::TerminalNode { label: label.to_string() }
         }
-        &ParseTree::InnerNode { label, ref children } => {
-            let cs = children.iter().map(|c| parsetree2ptbtree(ntdict, &c)).collect::<Vec<_>>();
+        ParseTree::InnerNode { label, ref children } => {
+            let cs = children.iter().map(|c| parsetree2ptbtree(ntdict, c)).collect::<Vec<_>>();
             PTBTree::InnerNode { label: ntdict[&label].clone(), children: cs }
         }
     }
 }
 
 fn debinarize_parsetree<'a>(ntdict: &HashMap<usize, String>, t: &ParseTree<'a>) -> ParseTree<'a> {
-    match t {
-        &ParseTree::TerminalNode { label } => ParseTree::TerminalNode { label },
-        &ParseTree::InnerNode { label, ref children } => {
+    match *t {
+        ParseTree::TerminalNode { label } => ParseTree::TerminalNode { label },
+        ParseTree::InnerNode { label, ref children } => {
             // S(JJ _NNP_VBD_NN(NNP _VBD_NN(VBD NN))) => S(JJ NNP VBD NN)
             // Does this node contain children that are _-started?
             // Replace each of them with its children (recursively)!
             
             let mut newchildren = Vec::new();
             for c in children {
-                match c {
-                    &ParseTree::InnerNode { label, children: _ } => {
+                match *c {
+                    ParseTree::InnerNode { label, .. } => {
                         if ntdict[&label].chars().next().unwrap() == '_' {
                             // So this would be _NNP_VB_NN(NNP _VB_NN(VB(VBD..) NN))).
                             // It has be debinarized first!
                             let newchild = debinarize_parsetree(ntdict, c);
                             // Now we have _NNP_VB_NN(NNP VB(VBD..) NN), so just take its children!
-                            if let ParseTree::InnerNode { label: _, children } = newchild {
+                            if let ParseTree::InnerNode { children, .. } = newchild {
                                 newchildren.extend(children)
                             } else {
                                 unreachable!()
@@ -112,12 +112,8 @@ fn normalize_grammar<'a, I>(rulelist: I) -> HashMap<usize, HashMap<RHS, f64>> wh
     let mut lhs_to_rhs_count: HashMap<usize, HashMap<RHS, usize>> = HashMap::new();
     
     for r in rulelist {
-        // First insert new inner map if necessary
-        if !lhs_to_rhs_count.contains_key(&r.lhs) {
-            lhs_to_rhs_count.insert(r.lhs.clone(), HashMap::new());
-        }
-        // Then unwrap.
-        let ref mut innermap = lhs_to_rhs_count.get_mut(&r.lhs).unwrap();
+        let innermap = lhs_to_rhs_count.entry(r.lhs).or_insert_with(HashMap::new);
+        
         let newcount = match innermap.get(&r.rhs) {
             Some(&count) => count + 1,
             None => 1
@@ -142,7 +138,7 @@ fn normalize_grammar<'a, I>(rulelist: I) -> HashMap<usize, HashMap<RHS, f64>> wh
 }
 
 fn cnfize_grammar(in_rules: &HashMap<usize, HashMap<RHS, f64>>, ntdict: &HashMap<usize, String>) -> (HashMap<usize, HashMap<RHS, f64>>, HashMap<usize, String>) {
-    let mut rev_ntdict: HashMap<String, usize> = reverse_bijection(&ntdict);
+    let mut rev_ntdict: HashMap<String, usize> = reverse_bijection(ntdict);
     
     for nt in rev_ntdict.keys() {
         assert!(!nt.contains("_"));
@@ -151,7 +147,7 @@ fn cnfize_grammar(in_rules: &HashMap<usize, HashMap<RHS, f64>>, ntdict: &HashMap
     fn binarize(ntdict: &HashMap<usize, String>, rev_ntdict: &mut HashMap<String, usize>, lhs: usize, rhs: &[usize]) -> Vec<Rule> {
         if rhs.len() > 2 {
             // right-branching
-            let ref rest = rhs[1..rhs.len()];
+            let rest = &rhs[1..rhs.len()];
             let rest_names: Vec<String> = rest.iter().map(|i| ntdict[i].to_string()).collect();
             let newnt_str = "_".to_string() + &rest_names.join("_");
             let newnt_int = treat_nt(rev_ntdict, &newnt_str);
@@ -179,14 +175,14 @@ fn cnfize_grammar(in_rules: &HashMap<usize, HashMap<RHS, f64>>, ntdict: &HashMap
     for (lhs, rhsdict) in in_rules {
         let mut innermap: HashMap<RHS, f64> = HashMap::new();
         for (rhs, &prob) in rhsdict {
-            match rhs {
-                &RHS::Terminal(_) => assert!(innermap.insert(rhs.clone(), prob).is_none()),
-                &RHS::CNFBin(_, _) => panic!("Already partially CNFized!"),
-                &RHS::CNFChain(_) => panic!("Already partially CNFized!"),
-                &RHS::NTs(ref nts) => {
-                    let mut newrules = binarize(&ntdict, &mut rev_ntdict, lhs.clone(), nts);
+            match *rhs {
+                RHS::Terminal(_) => assert!(innermap.insert(rhs.clone(), prob).is_none()),
+                RHS::CNFBin(_, _) => panic!("Already partially CNFized!"),
+                RHS::CNFChain(_) => panic!("Already partially CNFized!"),
+                RHS::NTs(ref nts) => {
+                    let mut newrules = binarize(ntdict, &mut rev_ntdict, *lhs, nts);
                     let Rule { lhs: lhs_, rhs: rhs_ } = newrules.pop().unwrap();
-                    assert!(*lhs == lhs_);
+                    assert_eq!(*lhs, lhs_);
                     assert!(innermap.insert(rhs_, prob).is_none());
                     new_rules_tmp.extend(newrules)
                 }
@@ -196,18 +192,13 @@ fn cnfize_grammar(in_rules: &HashMap<usize, HashMap<RHS, f64>>, ntdict: &HashMap
     }
     
     for Rule { lhs, rhs } in new_rules_tmp {
-        // First insert new inner map if necessary
-        if !cnf_rules.contains_key(&lhs) {
-            cnf_rules.insert(lhs, HashMap::new());
-        }
-        // Then unwrap.
-        cnf_rules.get_mut(&lhs).unwrap().insert(rhs, 1.0);
+        cnf_rules.entry(lhs).or_insert_with(HashMap::new).insert(rhs, 1.0);
     }
     
     (cnf_rules, reverse_bijection(&rev_ntdict))
 }
 
-fn cky_parse<'a>(cnf_rules: &'a HashMap<usize, HashMap<RHS, f64>>, sents: &Vec<String>) -> Vec<HashMap<usize, (f64, ParseTree<'a>)>> {
+fn cky_parse<'a>(cnf_rules: &'a HashMap<usize, HashMap<RHS, f64>>, sents: &[String]) -> Vec<HashMap<usize, (f64, ParseTree<'a>)>> {
     // Build helper dicts for quick access. All are bottom-up in the parse.
     let mut word_to_preterminal: HashMap<String, Vec<(usize, (f64, ParseTree))>> = HashMap::new();
     let mut nt_chains: HashMap<usize, Vec<(usize, f64)>> = HashMap::new();
@@ -216,8 +207,8 @@ fn cky_parse<'a>(cnf_rules: &'a HashMap<usize, HashMap<RHS, f64>>, sents: &Vec<S
     for (lhs, rhsdict) in cnf_rules {
         for (rhs, prob) in rhsdict {
             let logprob = prob.ln();
-            match rhs {
-                &RHS::Terminal(ref s) => {
+            match *rhs {
+                RHS::Terminal(ref s) => {
                     if !word_to_preterminal.contains_key(s) {
                         word_to_preterminal.insert(s.clone(), Vec::new());
                     }
@@ -225,17 +216,14 @@ fn cky_parse<'a>(cnf_rules: &'a HashMap<usize, HashMap<RHS, f64>>, sents: &Vec<S
                     let tree = ParseTree::InnerNode { label: *lhs, children: vec![tree] };
                     word_to_preterminal.get_mut(s).unwrap().push((*lhs, (logprob, tree)))
                 }
-                &RHS::CNFChain(ref r) => {
+                RHS::CNFChain(ref r) => {
                     if !nt_chains.contains_key(r) {
-                        nt_chains.insert(r.clone(), Vec::new());
+                        nt_chains.insert(*r, Vec::new());
                     }
-                    nt_chains.get_mut(&r).unwrap().push((*lhs, logprob))
+                    nt_chains.get_mut(r).unwrap().push((*lhs, logprob))
                 }
-                &RHS::CNFBin(ref r1, ref r2) => {
-                    if !rhss_to_lhs.contains_key(&(*r1, *r2)) {
-                        rhss_to_lhs.insert((r1.clone(), r2.clone()), Vec::new());
-                    }
-                    rhss_to_lhs.get_mut(&(*r1, *r2)).unwrap().push((*lhs, logprob))
+                RHS::CNFBin(ref r1, ref r2) => {
+                    rhss_to_lhs.entry((*r1, *r2)).or_insert_with(Vec::new).push((*lhs, logprob))
                 }
                 _ => panic!("Trying to use un-CNFized grammar!")
             }
@@ -248,7 +236,7 @@ fn cky_parse<'a>(cnf_rules: &'a HashMap<usize, HashMap<RHS, f64>>, sents: &Vec<S
         //println!("parsing: {}", raw_sent);
         
         // Tokenize
-        let sent: Vec<&str> = raw_sent.split(" ").collect();
+        let sent: Vec<&str> = raw_sent.split(' ').collect();
         
         // Now populate a chart (0-based indexing)!
         let mut ckychart: HashMap<(usize, usize), HashMap<usize, (f64, ParseTree)>> = HashMap::new();
@@ -257,7 +245,7 @@ fn cky_parse<'a>(cnf_rules: &'a HashMap<usize, HashMap<RHS, f64>>, sents: &Vec<S
         for (i,w) in sent.iter().enumerate() {
             // TODO actually could just break if we don't recognize terminals :D
             let terminals: HashMap<usize, (f64, ParseTree)> = match word_to_preterminal.get(*w) {
-                Some(prets) => prets.iter().map(|x| x.clone()).collect(),
+                Some(prets) => prets.iter().cloned().collect(),
                 None => HashMap::new()
             };
             ckychart.insert((i, i), terminals);
@@ -342,9 +330,9 @@ fn ptbset(trainsize: usize, testsize: usize, testmaxlen: usize) -> ((Vec<Rule>, 
     let mut rev_ntdict: HashMap<String, usize> = HashMap::new();
     
     fn getrules(t: &PTBTree, rulelist: &mut Vec<Rule>, rev_ntdict: &mut HashMap<String, usize>) {
-        match t {
-            &PTBTree::InnerNode { ref label, ref children } => {
-                let lhs = treat_nt(rev_ntdict, &label);
+        match *t {
+            PTBTree::InnerNode { ref label, ref children } => {
+                let lhs = treat_nt(rev_ntdict, label);
                 // Terminal case
                 if children.len() == 1 {
                     if let PTBTree::TerminalNode { ref label } = children[0] {
@@ -355,9 +343,8 @@ fn ptbset(trainsize: usize, testsize: usize, testmaxlen: usize) -> ((Vec<Rule>, 
                 // Other (NT) case
                 let mut child_ids: Vec<usize> = Vec::new();
                 for c in children {
-                    let s = match c {
-                        &PTBTree::InnerNode { ref label, children: _ } => label,
-                        &PTBTree::TerminalNode { ref label } => label
+                    let s = match *c {
+                        PTBTree::InnerNode { ref label, .. } | PTBTree::TerminalNode { ref label } => label
                     };
                     child_ids.push(treat_nt(rev_ntdict, s));
                     getrules(c, rulelist, rev_ntdict);
@@ -373,7 +360,7 @@ fn ptbset(trainsize: usize, testsize: usize, testmaxlen: usize) -> ((Vec<Rule>, 
     
     for t in &train_trees[0..trainsize] {
         //println!("{}", t);
-        getrules(&t, &mut rulelist, &mut rev_ntdict);
+        getrules(t, &mut rulelist, &mut rev_ntdict);
     }
     
     //println!("From {} trees: NTs: {}, Rules: {}", &train_trees[0..2000].len(), rev_ntdict.len(), rulelist.len());
@@ -404,7 +391,7 @@ fn ptbset(trainsize: usize, testsize: usize, testmaxlen: usize) -> ((Vec<Rule>, 
     ((rulelist, ntdict), (devsents, devtrees))
 }
 
-fn print_example(cnf_ntdict: &HashMap<usize, String>, sent: &str, tree: &PTBTree, sorted_candidates: &Vec<(usize, (f64, ParseTree))>) {
+fn print_example(cnf_ntdict: &HashMap<usize, String>, sent: &str, tree: &PTBTree, sorted_candidates: &[(usize, (f64, ParseTree))]) {
     if !sorted_candidates.is_empty() {
         println!("{}", sent);
         let mut got_s = false;
