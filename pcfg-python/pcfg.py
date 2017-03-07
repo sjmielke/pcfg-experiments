@@ -7,6 +7,8 @@ from nltk.corpus import treebank
 import timeit
 import resource
 
+import multiprocessing
+
 import json
 
 # Rule :: (int/LHS, [int/RHS or str/terminal])
@@ -119,6 +121,54 @@ def pp_tree(nt_dict, t):
 		return nt_dict[l] + "(" + ", ".join(pp_tree(nt_dict, c) for c in cs) + ")"
 
 # Actual CKY parsing
+# First the worker
+def parse_sent(word_to_preterminal, nt_chains, rhss_to_lhs, s, return_dict):
+	print("parsing:", s)
+	sent = s.split()
+	
+	# CKYchart :: {(int,int): {int/nt: (float/prob, Tree/parsetree)}} # 0-based
+	ckychart = {}
+	
+	# Terminal rules
+	#print("Width: \n1: ", end = '')
+	for (i,w) in enumerate(sent):
+		ws = word_to_preterminal[w]
+		#print(len(ws), "/ ", end = '')
+		ckychart[(i,i)] = ws
+	#print("")
+	
+	# Higher levels
+	for width in range(2, len(sent) + 1):
+		for i in range(0, len(sent) - width + 1):
+			ckychart[(i, i + width - 1)] = {}
+			cell = ckychart[(i, i + width - 1)]
+			for split in range(i + 1, i + width):
+				# Generate new candidates by combining two lower cells
+				#print(" ".join(sent[i:split]), "|", " ".join(sent[split:i+width]))
+				for (r1, (pr1, pt1)) in ckychart[(i, split - 1)].items():
+					for (r2, (pr2, pt2)) in ckychart[(split, i + width - 1)].items():
+						for (lhs, prob) in rhss_to_lhs[(r1,r2)]:
+							new_prob = pr1 + pr2 + prob
+							if lhs not in cell or cell[lhs][0] < new_prob:
+								new_ptree = (lhs, [pt1, pt2])
+								cell[lhs] = (new_prob, new_ptree)
+				# Generate new candidates by applying chain rules
+				got_new = True
+				while got_new:
+					got_new = False
+					for (reached_nt, (lower_prob, lower_ptree)) in list(cell.items()):
+						for (lhs, cr_prob) in nt_chains[reached_nt].items():
+							new_prob = cr_prob + lower_prob
+							if lhs not in cell or cell[lhs][0] < new_prob:
+								got_new = True
+								new_ptree = (lhs, [lower_ptree])
+								cell[lhs] = (new_prob, new_ptree)
+		#print("{}: ".format(width),end="")
+		#print(" / ".join([str(len(ckychart[(i, i + width - 1)])) for i in range(0, len(sent) - width + 1)]))
+	
+	#print("")
+	return_dict[''] = ckychart[(0, len(sent) - 1)]
+
 def cky_parse(cnf_rules, test):
 	# We assume rules are unique.
 	assert len(set(cnf_rules)) == len(cnf_rules)
@@ -155,52 +205,21 @@ def cky_parse(cnf_rules, test):
 	
 	# Specific test sentence parsing
 	result = []
+	
 	for s in test:
-		print("parsing:", s)
-		sent = s.split()
+		# if len(s.split()) != 58:
+		# 	continue
 		
-		# CKYchart :: {(int,int): {int/nt: (float/prob, Tree/parsetree)}} # 0-based
-		ckychart = {}
+		# manager = multiprocessing.Manager()
+		# return_dict = manager.dict()
+		# p = multiprocessing.Process(target=parse_sent, args=(word_to_preterminal, nt_chains, rhss_to_lhs, s, return_dict))
+		# p.start()
+		# p.join()
 		
-		# Terminal rules
-		#print("Width: \n1: ", end = '')
-		for (i,w) in enumerate(sent):
-			ws = word_to_preterminal[w]
-			#print(len(ws), "/ ", end = '')
-			ckychart[(i,i)] = ws
-		#print("")
+		return_dict = {}
+		parse_sent(word_to_preterminal, nt_chains, rhss_to_lhs, s, return_dict)
 		
-		# Higher levels
-		for width in range(2, len(sent) + 1):
-			for i in range(0, len(sent) - width + 1):
-				ckychart[(i, i + width - 1)] = {}
-				cell = ckychart[(i, i + width - 1)]
-				for split in range(i + 1, i + width):
-					# Generate new candidates by combining two lower cells
-					#print(" ".join(sent[i:split]), "|", " ".join(sent[split:i+width]))
-					for (r1, (pr1, pt1)) in ckychart[(i, split - 1)].items():
-						for (r2, (pr2, pt2)) in ckychart[(split, i + width - 1)].items():
-							for (lhs, prob) in rhss_to_lhs[(r1,r2)]:
-								new_prob = pr1 + pr2 + prob
-								if lhs not in cell or cell[lhs][0] < new_prob:
-									new_ptree = (lhs, [pt1, pt2])
-									cell[lhs] = (new_prob, new_ptree)
-					# Generate new candidates by applying chain rules
-					got_new = True
-					while got_new:
-						got_new = False
-						for (reached_nt, (lower_prob, lower_ptree)) in list(cell.items()):
-							for (lhs, cr_prob) in nt_chains[reached_nt].items():
-								new_prob = cr_prob + lower_prob
-								if lhs not in cell or cell[lhs][0] < new_prob:
-									got_new = True
-									new_ptree = (lhs, [lower_ptree])
-									cell[lhs] = (new_prob, new_ptree)
-			#print("{}: ".format(width),end="")
-			#print(" / ".join([str(len(ckychart[(i, i + width - 1)])) for i in range(0, len(sent) - width + 1)]))
-		
-		#print("")
-		result.append((s, ckychart[(0, len(sent) - 1)]))
+		result.append((s, return_dict['']))
 	
 	return result
 
@@ -246,33 +265,33 @@ def bananaset():
 	return (rules, ntdict), test
 
 def ptb_wsj_set():
-	trainsize = 2000
-	testsize = 100
+	trainsize = 3500
+	testsize = 300
 	
 	ts = list(itertools.chain(*(treebank.parsed_sents(fid) for fid in treebank.fileids())))[:trainsize + testsize]
 	testsents = [" ".join(s.leaves()) for s in ts[trainsize:]]
 	
-	with open("/tmp/trees.json", 'w') as f:
-		lins = []
-		for t in ts[:trainsize]:
-			def lin(t):
-				if isinstance(t, str):
-					label = t
-					cs = []
-				else:
-					label = t.label()
-					cs = t
-				
-				if '"' in label:
-					raise Exception("»\"« occuring in data! :O")
-				
-				return "{\"label\": \"" + label + "\", \"children\": [" + ",".join([lin(c) for c in cs]) + "]}"
-			lins.append(lin(t))
-		print("[", ",\n".join(lins), "]", file = f)
-	
-	with open("/tmp/test.txt", 'w') as f:
-		for s in testsents:
-			print(s, file = f)
+	# with open("/tmp/trees.json", 'w') as f:
+	# 	lins = []
+	# 	for t in ts[:trainsize]:
+	# 		def lin(t):
+	# 			if isinstance(t, str):
+	# 				label = t
+	# 				cs = []
+	# 			else:
+	# 				label = t.label()
+	# 				cs = t
+	# 			
+	# 			if '"' in label:
+	# 				raise Exception("»\"« occuring in data! :O")
+	# 			
+	# 			return "{\"label\": \"" + label + "\", \"children\": [" + ",".join([lin(c) for c in cs]) + "]}"
+	# 		lins.append(lin(t))
+	# 	print("[", ",\n".join(lins), "]", file = f)
+	# 
+	# with open("/tmp/test.txt", 'w') as f:
+	# 	for s in testsents:
+	# 		print(s, file = f)
 	
 	ts = ts[:trainsize]
 	
