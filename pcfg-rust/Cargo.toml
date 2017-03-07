@@ -4,7 +4,4 @@ version = "0.1.0"
 authors = ["Sebastian J. Mielke <sjm@sjmielke.com>"]
 
 [dependencies]
-json = "0.11.5"
-
-[dependencies.ptb-reader]
-path = "/home/sjm/programming/ptb-reader-rust/"
+ptb-reader = "0.2.0"

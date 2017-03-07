@@ -1,3 +1,6 @@
+#![feature(alloc_system)]
+extern crate alloc_system;
+
 use std::collections::HashMap;
 use std::f64; // log and exp
 
@@ -45,6 +48,52 @@ fn pp_tree<'a>(ntdict: &HashMap<usize, String>, t: &ParseTree<'a>) -> String {
         &ParseTree::InnerNode { label, ref children } => {
             let cs = children.iter().map(|c| pp_tree(ntdict, &c)).collect::<Vec<_>>().join(", ");
             ntdict[&label].clone() + "(" + &cs + ")"
+        }
+    }
+}
+
+fn parsetree2ptbtree(ntdict: &HashMap<usize, String>, t: &ParseTree) -> PTBTree {
+    match t {
+        &ParseTree::TerminalNode { label } => {
+            PTBTree::TerminalNode { label: label.to_string() }
+        }
+        &ParseTree::InnerNode { label, ref children } => {
+            let cs = children.iter().map(|c| parsetree2ptbtree(ntdict, &c)).collect::<Vec<_>>();
+            PTBTree::InnerNode { label: ntdict[&label].clone(), children: cs }
+        }
+    }
+}
+
+fn debinarize_parsetree<'a>(ntdict: &HashMap<usize, String>, t: &ParseTree<'a>) -> ParseTree<'a> {
+    match t {
+        &ParseTree::TerminalNode { label } => ParseTree::TerminalNode { label },
+        &ParseTree::InnerNode { label, ref children } => {
+            // S(JJ _NNP_VBD_NN(NNP _VBD_NN(VBD NN))) => S(JJ NNP VBD NN)
+            // Does this node contain children that are _-started?
+            // Replace each of them with its children (recursively)!
+            
+            let mut newchildren = Vec::new();
+            for c in children {
+                match c {
+                    &ParseTree::InnerNode { label, children: _ } => {
+                        if ntdict[&label].chars().next().unwrap() == '_' {
+                            // So this would be _NNP_VB_NN(NNP _VB_NN(VB(VBD..) NN))).
+                            // It has be debinarized first!
+                            let newchild = debinarize_parsetree(ntdict, c);
+                            // Now we have _NNP_VB_NN(NNP VB(VBD..) NN), so just take its children!
+                            if let ParseTree::InnerNode { label: _, children } = newchild {
+                                newchildren.extend(children)
+                            } else {
+                                unreachable!()
+                            }
+                        } else {
+                            newchildren.push(debinarize_parsetree(ntdict, c))
+                        }
+                    }
+                    _ => newchildren.push(debinarize_parsetree(ntdict, c))
+                }
+            }
+            ParseTree::InnerNode { label, children: newchildren }
         }
     }
 }
@@ -123,6 +172,10 @@ fn print_grammar(rules: &HashMap<usize, HashMap<RHS, f64>>, ntdict: &HashMap<usi
 
 fn cnfize_grammar(in_rules: &HashMap<usize, HashMap<RHS, f64>>, ntdict: &HashMap<usize, String>) -> (HashMap<usize, HashMap<RHS, f64>>, HashMap<usize, String>) {
     let mut rev_ntdict: HashMap<String, usize> = reverse_bijection(&ntdict);
+    
+    for nt in rev_ntdict.keys() {
+        assert!(!nt.contains("_"));
+    }
     
     fn binarize(ntdict: &HashMap<usize, String>, rev_ntdict: &mut HashMap<String, usize>, lhs: usize, rhs: &[usize]) -> Vec<Rule> {
         if rhs.len() > 2 {
@@ -221,7 +274,7 @@ fn cky_parse<'a>(cnf_rules: &'a HashMap<usize, HashMap<RHS, f64>>, sents: &Vec<S
     let mut results: Vec<HashMap<usize, (f64, ParseTree<'a>)>> = Vec::new();
     
     for raw_sent in sents {
-        println!("parsing: {}", raw_sent);
+        //println!("parsing: {}", raw_sent);
         
         // Tokenize
         let sent: Vec<&str> = raw_sent.split(" ").collect();
@@ -353,7 +406,11 @@ fn bananaset() -> ((Vec<Rule>, HashMap<usize, String>), Vec<String>) {
 }
 
 fn ptbset() -> ((Vec<Rule>, HashMap<usize, String>), Vec<String>) {
-    let all_trees = ptb_reader::parse_ptb_sample_dir("/home/sjm/documents/Uni/penn-treebank-sample/treebank/combined/");
+    let mut all_trees = ptb_reader::parse_ptb_sample_dir("/home/sjm/documents/Uni/penn-treebank-sample/treebank/combined/");
+    
+    for ref mut t in &mut all_trees {
+        t.strip_predicate_annotations()
+    }
     
     let mut rulelist: Vec<Rule> = Vec::new();
     let mut rev_ntdict: HashMap<String, usize> = HashMap::new();
@@ -388,7 +445,7 @@ fn ptbset() -> ((Vec<Rule>, HashMap<usize, String>), Vec<String>) {
         }
     }
     
-    for t in &all_trees[0..2000] {
+    for t in &all_trees[0..3500] {
         //println!("{}", t);
         getrules(&t, &mut rulelist, &mut rev_ntdict);
     }
@@ -400,8 +457,10 @@ fn ptbset() -> ((Vec<Rule>, HashMap<usize, String>), Vec<String>) {
     // load test sents
     
     let mut testsents: Vec<String> = Vec::new();
-    for t in &all_trees[2000..2100] {
-        let s: String = From::from(t.clone()); // yield
+    for t in &all_trees[3500..3800] {
+        let mut t_ = t.clone();
+        t_.strip_predicate_annotations();
+        let s: String = From::from(t_); // yield
         testsents.push(s)
     }
     
@@ -433,7 +492,9 @@ fn main() {
             let mut usablecell: Vec<_> = cell.iter().filter(|&(n, _)| cnf_ntdict[n].chars().next().unwrap() != '_').collect();
             usablecell.sort_by(|&(_, &(p1, _)), &(_, &(p2, _))| p2.partial_cmp(&p1).unwrap_or(std::cmp::Ordering::Equal));
             for &(n, &(p, ref ptree)) in usablecell.iter().take(10) {
-                println!("\t{:15} ({:1.20}) -> {}", cnf_ntdict[n], p.exp(), pp_tree(&cnf_ntdict, ptree));
+                print!("\t{:15} ({:1.20}) -> ", cnf_ntdict[n], p);
+                //println!("\t\t{}", parsetree2ptbtree(&cnf_ntdict, ptree));
+                println!("{}", parsetree2ptbtree(&cnf_ntdict, &debinarize_parsetree(&cnf_ntdict, ptree)));
                 if cnf_ntdict[n] == "S" {
                     got_s = true
                 }
@@ -443,7 +504,9 @@ fn main() {
                 if !got_s {
                     for (n, &(p, ref ptree)) in usablecell {
                         if cnf_ntdict[n] == "S" {
-                            println!("\t{:15} ({:1.20}) -> {}", cnf_ntdict[n], p.exp(), pp_tree(&cnf_ntdict, ptree))
+                            print!("\t{:15} ({:1.20}) -> ", cnf_ntdict[n], p);
+                            //println!("\t\t{}", parsetree2ptbtree(&cnf_ntdict, ptree));
+                            println!("{}", parsetree2ptbtree(&cnf_ntdict, &debinarize_parsetree(&cnf_ntdict, ptree)))
                         }
                     }
                 }
