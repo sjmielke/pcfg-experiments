@@ -1,11 +1,19 @@
-#![feature(alloc_system)]
-extern crate alloc_system;
+//#![feature(alloc_system)]
+//extern crate alloc_system;
 
 use std::collections::HashMap;
 use std::f64; // log and exp
+use std::process::Command;
+
+extern crate tempdir;
+use std::fs::File;
+use std::io::Write;
+use tempdir::TempDir;
+
+extern crate argparse;
+use argparse::{ArgumentParser, Store};
 
 extern crate ptb_reader;
-
 use ptb_reader::PTBTree;
 
 fn reverse_bijection<V: Clone + Eq + std::hash::Hash, K: Clone + Eq + std::hash::Hash>(indict: &HashMap<K, V>) -> HashMap<V, K> {
@@ -39,16 +47,6 @@ enum ParseTree<'a> {
     },
     TerminalNode {
         label: &'a str
-    }
-}
-
-fn pp_tree<'a>(ntdict: &HashMap<usize, String>, t: &ParseTree<'a>) -> String {
-    match t {
-        &ParseTree::TerminalNode { label } => label.to_string(),
-        &ParseTree::InnerNode { label, ref children } => {
-            let cs = children.iter().map(|c| pp_tree(ntdict, &c)).collect::<Vec<_>>().join(", ");
-            ntdict[&label].clone() + "(" + &cs + ")"
-        }
     }
 }
 
@@ -141,33 +139,6 @@ fn normalize_grammar<'a, I>(rulelist: I) -> HashMap<usize, HashMap<RHS, f64>> wh
     }
     
     lhs_to_rhs_prob
-}
-
-fn print_grammar(rules: &HashMap<usize, HashMap<RHS, f64>>, ntdict: &HashMap<usize, String>) {
-    let numrules: usize = rules.values().map(|d| d.len()).sum();
-    println!("{} NTs, {} rules.", ntdict.len(), numrules);
-    
-    if true {
-        println!("{:?}", ntdict);
-        
-        for (ref lhs, ref rhsdict) in rules {
-            for (ref rhs, ref prob) in *rhsdict {
-                match *rhs {
-                    &RHS::Terminal(ref s) => println!("{:>15} -> {:<15} # {:1.10}", &ntdict[*lhs], s, prob),
-                    &RHS::NTs(ref nts) => {
-                        let ntlist: Vec<String> = nts.iter().map(|n| ntdict.get(n).unwrap().to_string()).collect();
-                        println!("{:>15} -> {:<15} # {:1.10}", ntdict[*lhs], ntlist.join(" "), prob)
-                    }
-                    &RHS::CNFBin(ref r1, ref r2) => {
-                        println!("{:>15} -> {:<15} # {:1.10}", ntdict[*lhs], format!("{} {}", &ntdict[r1], &ntdict[r2]), prob)
-                    }
-                    &RHS::CNFChain(ref r) => {
-                        println!("{:>15} -> {:<15} # {:1.10}", ntdict[*lhs], &ntdict[r], prob)
-                    }
-                }
-            }
-        }
-    }
 }
 
 fn cnfize_grammar(in_rules: &HashMap<usize, HashMap<RHS, f64>>, ntdict: &HashMap<usize, String>) -> (HashMap<usize, HashMap<RHS, f64>>, HashMap<usize, String>) {
@@ -356,62 +327,17 @@ fn cky_parse<'a>(cnf_rules: &'a HashMap<usize, HashMap<RHS, f64>>, sents: &Vec<S
     results
 }
 
-fn bananaset() -> ((Vec<Rule>, HashMap<usize, String>), Vec<String>) {
-    let s = "
-        S -> NP
-        NP -> DET NN
-        NP -> DET JJ NN
-        DET -> 'the'
-        DET -> 'the'
-        DET -> 'a'
-        DET -> 'an'
-        JJ -> 'fresh'
-        NN -> 'apple'
-        NN -> 'orange'
-        ";
+fn ptbset(trainsize: usize, testsize: usize, testmaxlen: usize) -> ((Vec<Rule>, HashMap<usize, String>), (Vec<String>, Vec<PTBTree>)) {
+    //println!("Reading in the PTB train set...");
+    let mut train_trees = ptb_reader::parse_ptb_sections("/home/sjm/documents/Uni/FuzzySP/treebank-3_LDC99T42/treebank_3/parsed/mrg/wsj", (2..22).collect()); // sections 2-21
+    println!("Read in a total of {} trees, but limiting them to trainsize = {} trees.", train_trees.len(), trainsize);
     
-    let mut rulelist: Vec<Rule> = Vec::new();
-    let mut rev_ntdict: HashMap<String, usize> = HashMap::new();
-    
-    for l in s.lines() {
-        let l: &str = l.trim();
-        if !l.is_empty() {
-            let ruleparts: Vec<&str> = l.split(" -> ").collect();
-            assert!(ruleparts.len() == 2);
-            let rule = Rule { lhs: treat_nt(&mut rev_ntdict, ruleparts[0]), rhs:
-                match ruleparts[1].chars().next() {
-                    Some('\'') => {
-                        let mut trimmed_rhs = ruleparts[1][1..].to_string();
-                        let newlen = trimmed_rhs.len() - 1;
-                        trimmed_rhs.truncate(newlen);
-                        RHS::Terminal(trimmed_rhs)
-                    },
-                    Some(_) => { 
-                        let mut nts: Vec<usize> = Vec::new();
-                        for p in ruleparts[1].split(" ") {
-                            nts.push(treat_nt(&mut rev_ntdict, p))
-                        }
-                        RHS::NTs(nts)
-                    },
-                    None => panic!("Empty LHS!"),
-                }
-            };
-            rulelist.push(rule);
-        }
-    }
-    
-    let ntdict = reverse_bijection(&rev_ntdict);
-    
-    ((rulelist, ntdict), vec!["the fresh apple".to_string(), "the fresh banana".to_string()])
-}
-
-fn ptbset() -> ((Vec<Rule>, HashMap<usize, String>), Vec<String>) {
-    let mut all_trees = ptb_reader::parse_ptb_sample_dir("/home/sjm/documents/Uni/penn-treebank-sample/treebank/combined/");
-    
-    for ref mut t in &mut all_trees {
+    //println!("Removing unwanted annotations from train...");
+    for ref mut t in &mut train_trees {
         t.strip_predicate_annotations()
     }
     
+    //println!("Reading off rules from train...");
     let mut rulelist: Vec<Rule> = Vec::new();
     let mut rev_ntdict: HashMap<String, usize> = HashMap::new();
     
@@ -445,75 +371,144 @@ fn ptbset() -> ((Vec<Rule>, HashMap<usize, String>), Vec<String>) {
         }
     }
     
-    for t in &all_trees[0..3500] {
+    for t in &train_trees[0..trainsize] {
         //println!("{}", t);
         getrules(&t, &mut rulelist, &mut rev_ntdict);
     }
     
-    //println!("From {} trees: NTs: {}, Rules: {}", &all_trees[0..2000].len(), rev_ntdict.len(), rulelist.len());
+    //println!("From {} trees: NTs: {}, Rules: {}", &train_trees[0..2000].len(), rev_ntdict.len(), rulelist.len());
     
     let ntdict = reverse_bijection(&rev_ntdict);
     
     // load test sents
     
-    let mut testsents: Vec<String> = Vec::new();
-    for t in &all_trees[3500..3800] {
-        let mut t_ = t.clone();
-        t_.strip_predicate_annotations();
-        let s: String = From::from(t_); // yield
-        testsents.push(s)
-    }
+    //println!("Reading, stripping and yielding test sentences...");
+    let read_devtrees = ptb_reader::parse_ptb_sections("/home/sjm/documents/Uni/FuzzySP/treebank-3_LDC99T42/treebank_3/parsed/mrg/wsj", vec![22]);
+    let read_devtrees_len = read_devtrees.len();
     
-    ((rulelist, ntdict), testsents)
+    let mut devsents: Vec<String> = Vec::new();
+    let mut devtrees: Vec<PTBTree> = Vec::new();
+    let mut testcount = 0;
+    for mut t in read_devtrees {
+        if t.front_length() <= testmaxlen && testcount < testsize {
+            t.strip_predicate_annotations();
+            devsents.push(t.front());
+            devtrees.push(t);
+            testcount += 1
+        }
+    }
+    assert_eq!(testcount, devtrees.len());
+    println!("From {} candidates we took {} dev sentences (max length {}, we wanted {})!", read_devtrees_len, testcount, testmaxlen, testsize);
+    
+    //println!("PTB set done!");
+    ((rulelist, ntdict), (devsents, devtrees))
 }
 
-fn main() {
-    let ((cnf_rules, cnf_ntdict), testsents) = {
-        let ((rulelist, ntdict), testsents) = ptbset();
-        let rules = normalize_grammar(rulelist.iter());
-        //print_grammar(&rules, &ntdict);
-        println!("Now CNFing!");
-        (cnfize_grammar(&rules, &ntdict), testsents)
-    };
-    //println!("What came out?");
-    //print_grammar(&cnf_rules, &cnf_ntdict);
-    //println!("try printing original again");
-    //print_grammar(&rules, &ntdict);
-    //println!("try printing cnfized again");
-    //print_grammar(&cnf_rules, &cnf_ntdict);
-    
-    println!("Now parsing!");
-    let parses = cky_parse(&cnf_rules, &testsents);
-    
-    for (s, cell) in testsents.iter().zip(parses.iter()) {
-        if !cell.is_empty() {
-            println!("{}", s);
-            let mut got_s = false;
-            let mut usablecell: Vec<_> = cell.iter().filter(|&(n, _)| cnf_ntdict[n].chars().next().unwrap() != '_').collect();
-            usablecell.sort_by(|&(_, &(p1, _)), &(_, &(p2, _))| p2.partial_cmp(&p1).unwrap_or(std::cmp::Ordering::Equal));
-            for &(n, &(p, ref ptree)) in usablecell.iter().take(10) {
-                print!("\t{:15} ({:1.20}) -> ", cnf_ntdict[n], p);
-                //println!("\t\t{}", parsetree2ptbtree(&cnf_ntdict, ptree));
-                println!("{}", parsetree2ptbtree(&cnf_ntdict, &debinarize_parsetree(&cnf_ntdict, ptree)));
-                if cnf_ntdict[n] == "S" {
-                    got_s = true
-                }
+fn print_example(cnf_ntdict: &HashMap<usize, String>, sent: &str, tree: &PTBTree, sorted_candidates: &Vec<(usize, (f64, ParseTree))>) {
+    if !sorted_candidates.is_empty() {
+        println!("{}", sent);
+        let mut got_s = false;
+        // True parse
+        println!("  {:28} -> {}", "", tree);
+        // Algo
+        for &(ref n, (p, ref ptree)) in sorted_candidates.iter().take(10) {
+            println!("  {:10} ({:4.10}) -> {}", cnf_ntdict[n], p, parsetree2ptbtree(cnf_ntdict, &debinarize_parsetree(cnf_ntdict, ptree)));
+            if cnf_ntdict[n] == "S" {
+                got_s = true
             }
-            if usablecell.len() > 10 {
-                println!("\t...");
-                if !got_s {
-                    for (n, &(p, ref ptree)) in usablecell {
-                        if cnf_ntdict[n] == "S" {
-                            print!("\t{:15} ({:1.20}) -> ", cnf_ntdict[n], p);
-                            //println!("\t\t{}", parsetree2ptbtree(&cnf_ntdict, ptree));
-                            println!("{}", parsetree2ptbtree(&cnf_ntdict, &debinarize_parsetree(&cnf_ntdict, ptree)))
-                        }
+        }
+        if sorted_candidates.len() > 10 {
+            println!("\t...");
+            if !got_s {
+                for &(ref n, (p, ref ptree)) in sorted_candidates {
+                    if cnf_ntdict[n] == "S" {
+                        println!("  {:10} ({:4.10}) -> {}", cnf_ntdict[n], p, parsetree2ptbtree(cnf_ntdict, &debinarize_parsetree(cnf_ntdict, ptree)))
                     }
                 }
             }
         }
-        else {
-            println!("{}\n", s);
-        }
     }
+    else {
+        println!("{}\n", sent);
+    }
+}
+
+fn main() {
+    let mut trainsize = 3500;
+    let mut testsize = 300;
+    let mut testmaxlen = 30;
+    
+    { // this block limits scope of borrows by ap.refer() method
+        let mut ap = ArgumentParser::new();
+        ap.set_description("PCFG parsing");
+        ap.refer(&mut trainsize)
+            .add_option(&["--trainsize"], Store,
+            "Number of training sentences from sections 2-21");
+        ap.refer(&mut testsize)
+            .add_option(&["--testsize"], Store,
+            "Number of test sentences from section 22");
+        ap.refer(&mut testmaxlen)
+            .add_option(&["--testmaxlen"], Store,
+            "Maximum length of each test sentence (words)");
+        ap.parse_args_or_exit();
+    }
+    
+    let ((cnf_rules, cnf_ntdict), (testsents, testtrees)) = {
+        let ((rulelist, ntdict), (testsents, testtrees)) = ptbset(trainsize, testsize, testmaxlen);
+        let rules = normalize_grammar(rulelist.iter());
+        //println!("Now CNFing!");
+        (cnfize_grammar(&rules, &ntdict), (testsents, testtrees))
+    };
+    
+    //println!("Now parsing!");
+    let parses = cky_parse(&cnf_rules, &testsents);
+    
+    // Save output for EVALB call
+    let tmp_dir = TempDir::new("pcfg-rust").unwrap();
+    let gold_path = tmp_dir.path().join("gold.txt");
+    let best_path = tmp_dir.path().join("best.txt");
+    let mut gold_file = File::create(&gold_path).unwrap();
+    let mut best_file = File::create(&best_path).unwrap();
+    
+    for ((sent, tree), cell) in testsents.iter().zip(testtrees).zip(parses.iter()) {
+        // Remove binarization traces
+        let mut candidates: Vec<(usize, (f64, ParseTree))> = Vec::new();
+        for (nt, &(p, ref ptree)) in cell {
+            // Only keep candidates ending in proper NTs
+            if cnf_ntdict[nt].chars().next().unwrap() != '_' {
+                // Remove inner binarization nodes
+                candidates.push((*nt, (p, debinarize_parsetree(&cnf_ntdict, ptree))))
+            }
+        }
+        // Sort
+        candidates.sort_by(|&(_, (p1, _)), &(_, (p2, _))| p2.partial_cmp(&p1).unwrap_or(std::cmp::Ordering::Equal));
+        
+        //print_example(&cnf_ntdict, &sent, &tree, &candidates);
+        
+        let gold_parse: String = format!("{}", tree);
+        let best_parse: String = match candidates.get(0) {
+            None => "".to_string(),
+            Some(&(_, (_, ref parsetree))) => format!("{}", parsetree2ptbtree(&cnf_ntdict, &parsetree))
+        };
+        
+        writeln!(gold_file, "{}", gold_parse).unwrap();
+        writeln!(best_file, "{}", best_parse).unwrap();
+    }
+    
+    match Command::new("../EVALB/evalb").arg(gold_path).arg(best_path).output() {
+        Ok(evalb) => {
+            let evalb_output = String::from_utf8(evalb.stdout).unwrap();
+            for line in evalb_output.lines() {
+                if line.starts_with("Bracketing FMeasure") {
+                    println!("{}", line);
+                    break
+                }
+            }
+        }
+        Err(e) => println!("Didn't find EVALB: {}", e)
+    }
+    
+    drop(gold_file);
+    drop(best_file);
+    tmp_dir.close().unwrap();
 }
