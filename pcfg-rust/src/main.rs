@@ -386,9 +386,9 @@ fn cky_parse<'a>(cnf_rules: &'a HashMap<usize, HashMap<RHS, f64>>, sents: &[Stri
     results
 }
 
-fn ptbset(trainsize: usize, testsize: usize, testmaxlen: usize) -> ((Vec<Rule>, HashMap<usize, String>), (Vec<String>, Vec<PTBTree>)) {
+fn ptbset(wsj_path: &str, trainsize: usize, testsize: usize, testmaxlen: usize) -> ((Vec<Rule>, HashMap<usize, String>), (Vec<String>, Vec<PTBTree>)) {
     //println!("Reading in the PTB train set...");
-    let mut train_trees = ptb_reader::parse_ptb_sections("/home/sjm/documents/Uni/FuzzySP/treebank-3_LDC99T42/treebank_3/parsed/mrg/wsj", (2..22).collect()); // sections 2-21
+    let mut train_trees = ptb_reader::parse_ptb_sections(wsj_path, (2..22).collect()); // sections 2-21
     //println!("Read in a total of {} trees, but limiting them to trainsize = {} trees.", train_trees.len(), trainsize);
     
     assert!(train_trees.len() >= trainsize);
@@ -443,7 +443,7 @@ fn ptbset(trainsize: usize, testsize: usize, testmaxlen: usize) -> ((Vec<Rule>, 
     // load test sents
     
     //println!("Reading, stripping and yielding test sentences...");
-    let read_devtrees = ptb_reader::parse_ptb_sections("/home/sjm/documents/Uni/FuzzySP/treebank-3_LDC99T42/treebank_3/parsed/mrg/wsj", vec![22]);
+    let read_devtrees = ptb_reader::parse_ptb_sections(wsj_path, vec![22]);
     let read_devtrees_len = read_devtrees.len();
     
     let mut devsents: Vec<String> = Vec::new();
@@ -501,6 +501,8 @@ fn main() {
         testmaxlen: 30
     };
     
+    let mut wsj_path: String = "/home/sjm/documents/Uni/FuzzySP/treebank-3_LDC99T42/treebank_3/parsed/mrg/wsj".to_string();
+    
     { // this block limits scope of borrows by ap.refer() method
         let mut ap = ArgumentParser::new();
         ap.set_description("PCFG parsing");
@@ -513,11 +515,14 @@ fn main() {
         ap.refer(&mut stats.testmaxlen)
             .add_option(&["--testmaxlen"], Store,
             "Maximum length of each test sentence (words)");
+        ap.refer(&mut wsj_path)
+            .add_option(&["--wsjpath"], Store,
+            "Path of WSL merged data (.../treebank_3/parsed/mrg/wsj)");
         ap.parse_args_or_exit();
     }
     
     let t = get_usertime();
-    let ((rulelist, ntdict), (testsents, testtrees)) = ptbset(stats.trainsize, stats.testsize, stats.testmaxlen);
+    let ((rulelist, ntdict), (testsents, testtrees)) = ptbset(&wsj_path, stats.trainsize, stats.testsize, stats.testmaxlen);
     let rules = normalize_grammar(rulelist.iter());
     //println!("Now CNFing!");
     let (cnf_rules, cnf_ntdict) = cnfize_grammar(&rules, &ntdict);
