@@ -16,6 +16,54 @@ use argparse::{ArgumentParser, Store};
 extern crate ptb_reader;
 use ptb_reader::PTBTree;
 
+struct PCFGParsingStatistics {
+    // Raw numbers
+    trainsize: usize,
+    testsize: usize,
+    testmaxlen: usize,
+    // Times in seconds
+    gram_ext_cnf: f64,
+    cky_prep: f64,
+    cky_terms: f64,
+    cky_higher: f64,
+    // Raw numbers
+    oov_words: usize,
+    oov_sents: usize,
+    parsefails: usize,
+    // Percent
+    fmeasure: f64,
+    or_fail_fmeasure: f64
+}
+
+// taken from https://github.com/dikaiosune/rust-runtime-benchmarks/blob/master/bench-suite-linux/src/bencher.rs
+extern crate libc;
+use libc::{c_long, rusage, suseconds_t, timeval, time_t, getrusage, RUSAGE_SELF};
+/// Returns time elapsed in userspace in seconds.
+pub fn get_usertime() -> f64 {
+    let mut usage = rusage {
+        ru_utime: timeval{ tv_sec: 0 as time_t, tv_usec: 0 as suseconds_t, },
+        ru_stime: timeval{ tv_sec: 0 as time_t, tv_usec: 0 as suseconds_t, },
+        ru_maxrss: 0 as c_long,
+        ru_ixrss: 0 as c_long,
+        ru_idrss: 0 as c_long,
+        ru_isrss: 0 as c_long,
+        ru_minflt: 0 as c_long,
+        ru_majflt: 0 as c_long,
+        ru_nswap: 0 as c_long,
+        ru_inblock: 0 as c_long,
+        ru_oublock: 0 as c_long,
+        ru_msgsnd: 0 as c_long,
+        ru_msgrcv: 0 as c_long,
+        ru_nsignals: 0 as c_long,
+        ru_nvcsw: 0 as c_long,
+        ru_nivcsw: 0 as c_long,
+    };
+    unsafe { getrusage(RUSAGE_SELF, (&mut usage) as *mut rusage); }
+    let secs = usage.ru_utime.tv_sec as usize;
+    let usecs = usage.ru_utime.tv_usec as usize;
+    (secs * 1_000_000 + usecs) as f64 / 1000000.0
+}
+
 fn reverse_bijection<V: Clone + Eq + std::hash::Hash, K: Clone + Eq + std::hash::Hash>(indict: &HashMap<K, V>) -> HashMap<V, K> {
     let mut outdict: HashMap<V, K> = HashMap::new();
     for item in indict {
@@ -198,8 +246,9 @@ fn cnfize_grammar(in_rules: &HashMap<usize, HashMap<RHS, f64>>, ntdict: &HashMap
     (cnf_rules, reverse_bijection(&rev_ntdict))
 }
 
-fn cky_parse<'a>(cnf_rules: &'a HashMap<usize, HashMap<RHS, f64>>, sents: &[String]) -> Vec<HashMap<usize, (f64, ParseTree<'a>)>> {
+fn cky_parse<'a>(cnf_rules: &'a HashMap<usize, HashMap<RHS, f64>>, sents: &[String], stats: &mut PCFGParsingStatistics) -> Vec<HashMap<usize, (f64, ParseTree<'a>)>> {
     // Build helper dicts for quick access. All are bottom-up in the parse.
+    let t = get_usertime();
     let mut word_to_preterminal: HashMap<String, Vec<(usize, (f64, ParseTree))>> = HashMap::new();
     let mut nt_chains: HashMap<usize, Vec<(usize, f64)>> = HashMap::new();
     let mut rhss_to_lhs: HashMap<(usize, usize), Vec<(usize, f64)>> = HashMap::new();
@@ -229,11 +278,17 @@ fn cky_parse<'a>(cnf_rules: &'a HashMap<usize, HashMap<RHS, f64>>, sents: &[Stri
             }
         }
     }
+    stats.cky_prep = get_usertime() - t;
+    
+    stats.cky_terms = 0.0;
+    stats.cky_higher = 0.0;
     
     let mut results: Vec<HashMap<usize, (f64, ParseTree<'a>)>> = Vec::new();
     
     for raw_sent in sents {
         //println!("parsing: {}", raw_sent);
+        
+        let mut oov_in_this_sent = false;
         
         // Tokenize
         let sent: Vec<&str> = raw_sent.split(' ').collect();
@@ -242,17 +297,24 @@ fn cky_parse<'a>(cnf_rules: &'a HashMap<usize, HashMap<RHS, f64>>, sents: &[Stri
         let mut ckychart: HashMap<(usize, usize), HashMap<usize, (f64, ParseTree)>> = HashMap::new();
         
         // Populate leafs
+        let t = get_usertime();
         for (i,w) in sent.iter().enumerate() {
             // TODO actually could just break if we don't recognize terminals :D
             let terminals: HashMap<usize, (f64, ParseTree)> = match word_to_preterminal.get(*w) {
                 Some(prets) => prets.iter().cloned().collect(),
-                None => HashMap::new()
+                None => {
+                    stats.oov_words += 1;
+                    oov_in_this_sent = true;
+                    HashMap::new()
+                }
             };
             ckychart.insert((i, i), terminals);
             //println!("{}, {:?}", i, ckychart[&(i,i)]);
         }
+        stats.cky_terms += get_usertime() - t;
         
         // Populate inner cells
+        let t = get_usertime();
         for width in 2 .. sent.len() + 1 {
             for start in 0 .. sent.len() + 1 - width {
                 let end = start + width;
@@ -308,6 +370,15 @@ fn cky_parse<'a>(cnf_rules: &'a HashMap<usize, HashMap<RHS, f64>>, sents: &[Stri
                 assert!(ckychart.insert((start, end - 1), cell).is_none())
             }
         }
+        stats.cky_higher += get_usertime() - t;
+        
+        if oov_in_this_sent {
+            stats.oov_sents += 1
+        }
+        
+        if ckychart[&(0, sent.len() - 1)].is_empty() {
+            stats.parsefails += 1
+        }
         
         results.push(ckychart[&(0, sent.len() - 1)].clone())
     }
@@ -318,7 +389,9 @@ fn cky_parse<'a>(cnf_rules: &'a HashMap<usize, HashMap<RHS, f64>>, sents: &[Stri
 fn ptbset(trainsize: usize, testsize: usize, testmaxlen: usize) -> ((Vec<Rule>, HashMap<usize, String>), (Vec<String>, Vec<PTBTree>)) {
     //println!("Reading in the PTB train set...");
     let mut train_trees = ptb_reader::parse_ptb_sections("/home/sjm/documents/Uni/FuzzySP/treebank-3_LDC99T42/treebank_3/parsed/mrg/wsj", (2..22).collect()); // sections 2-21
-    println!("Read in a total of {} trees, but limiting them to trainsize = {} trees.", train_trees.len(), trainsize);
+    //println!("Read in a total of {} trees, but limiting them to trainsize = {} trees.", train_trees.len(), trainsize);
+    
+    assert!(train_trees.len() >= trainsize);
     
     //println!("Removing unwanted annotations from train...");
     for ref mut t in &mut train_trees {
@@ -375,17 +448,15 @@ fn ptbset(trainsize: usize, testsize: usize, testmaxlen: usize) -> ((Vec<Rule>, 
     
     let mut devsents: Vec<String> = Vec::new();
     let mut devtrees: Vec<PTBTree> = Vec::new();
-    let mut testcount = 0;
     for mut t in read_devtrees {
-        if t.front_length() <= testmaxlen && testcount < testsize {
+        if t.front_length() <= testmaxlen && devtrees.len() < testsize {
             t.strip_predicate_annotations();
             devsents.push(t.front());
             devtrees.push(t);
-            testcount += 1
         }
     }
-    assert_eq!(testcount, devtrees.len());
-    println!("From {} candidates we took {} dev sentences (max length {}, we wanted {})!", read_devtrees_len, testcount, testmaxlen, testsize);
+    assert_eq!(devtrees.len(), testsize);
+    //println!("From {} candidates we took {} dev sentences (max length {})!", read_devtrees_len, devtrees.len(), testmaxlen);
     
     //println!("PTB set done!");
     ((rulelist, ntdict), (devsents, devtrees))
@@ -421,41 +492,48 @@ fn print_example(cnf_ntdict: &HashMap<usize, String>, sent: &str, tree: &PTBTree
 }
 
 fn main() {
-    let mut trainsize = 3500;
-    let mut testsize = 300;
-    let mut testmaxlen = 30;
+    let mut stats: PCFGParsingStatistics = PCFGParsingStatistics{
+        // Placeholders
+        gram_ext_cnf:f64::NAN, cky_prep:f64::NAN, cky_terms:f64::NAN, cky_higher:f64::NAN, oov_words:0, oov_sents:0, parsefails:0, fmeasure:f64::NAN, or_fail_fmeasure:f64::NAN,
+        // Values
+        trainsize: 7500,
+        testsize: 500,
+        testmaxlen: 30
+    };
     
     { // this block limits scope of borrows by ap.refer() method
         let mut ap = ArgumentParser::new();
         ap.set_description("PCFG parsing");
-        ap.refer(&mut trainsize)
+        ap.refer(&mut stats.trainsize)
             .add_option(&["--trainsize"], Store,
             "Number of training sentences from sections 2-21");
-        ap.refer(&mut testsize)
+        ap.refer(&mut stats.testsize)
             .add_option(&["--testsize"], Store,
             "Number of test sentences from section 22");
-        ap.refer(&mut testmaxlen)
+        ap.refer(&mut stats.testmaxlen)
             .add_option(&["--testmaxlen"], Store,
             "Maximum length of each test sentence (words)");
         ap.parse_args_or_exit();
     }
     
-    let ((cnf_rules, cnf_ntdict), (testsents, testtrees)) = {
-        let ((rulelist, ntdict), (testsents, testtrees)) = ptbset(trainsize, testsize, testmaxlen);
-        let rules = normalize_grammar(rulelist.iter());
-        //println!("Now CNFing!");
-        (cnfize_grammar(&rules, &ntdict), (testsents, testtrees))
-    };
+    let t = get_usertime();
+    let ((rulelist, ntdict), (testsents, testtrees)) = ptbset(stats.trainsize, stats.testsize, stats.testmaxlen);
+    let rules = normalize_grammar(rulelist.iter());
+    //println!("Now CNFing!");
+    let (cnf_rules, cnf_ntdict) = cnfize_grammar(&rules, &ntdict);
+    stats.gram_ext_cnf = get_usertime() - t;
     
     //println!("Now parsing!");
-    let parses = cky_parse(&cnf_rules, &testsents);
+    let parses = cky_parse(&cnf_rules, &testsents, &mut stats);
     
     // Save output for EVALB call
     let tmp_dir = TempDir::new("pcfg-rust").unwrap();
     let gold_path = tmp_dir.path().join("gold.txt");
     let best_path = tmp_dir.path().join("best.txt");
+    let best_or_fail_path = tmp_dir.path().join("best_or_fail.txt");
     let mut gold_file = File::create(&gold_path).unwrap();
     let mut best_file = File::create(&best_path).unwrap();
+    let mut best_or_fail_file = File::create(&best_or_fail_path).unwrap();
     
     for ((sent, tree), cell) in testsents.iter().zip(testtrees).zip(parses.iter()) {
         // Remove binarization traces
@@ -474,26 +552,46 @@ fn main() {
         
         let gold_parse: String = format!("{}", tree);
         let best_parse: String = match candidates.get(0) {
+            None => "(( ".to_string() + &sent.replace(" ", ") ( ") + "))",
+            Some(&(_, (_, ref parsetree))) => format!("{}", parsetree2ptbtree(&cnf_ntdict, &parsetree))
+        };
+        let best_or_fail_parse: String = match candidates.get(0) {
             None => "".to_string(),
             Some(&(_, (_, ref parsetree))) => format!("{}", parsetree2ptbtree(&cnf_ntdict, &parsetree))
         };
         
         writeln!(gold_file, "{}", gold_parse).unwrap();
         writeln!(best_file, "{}", best_parse).unwrap();
+        writeln!(best_or_fail_file, "{}", best_or_fail_parse).unwrap();
     }
     
-    match Command::new("../EVALB/evalb").arg(gold_path).arg(best_path).output() {
-        Ok(evalb) => {
-            let evalb_output = String::from_utf8(evalb.stdout).unwrap();
-            for line in evalb_output.lines() {
-                if line.starts_with("Bracketing FMeasure") {
-                    println!("{}", line);
-                    break
-                }
-            }
+    for line in String::from_utf8(Command::new("../EVALB/evalb").arg(&gold_path).arg(best_path).output().unwrap().stdout).unwrap().lines() {
+        if line.starts_with("Bracketing FMeasure") {
+            stats.fmeasure = line.split('=').nth(1).unwrap().trim().parse().unwrap();
+            break
         }
-        Err(e) => println!("Didn't find EVALB: {}", e)
     }
+    for line in String::from_utf8(Command::new("../EVALB/evalb").arg(&gold_path).arg(best_or_fail_path).output().unwrap().stdout).unwrap().lines() {
+        if line.starts_with("Bracketing FMeasure") {
+            stats.or_fail_fmeasure = line.split('=').nth(1).unwrap().trim().parse().unwrap();
+            break
+        }
+    }
+    
+    // Print statistics
+    //println!("trainsize\ttestsize\ttestmaxlen\tgram_ext_cnf\tcky_prep\tcky_terms\tcky_higher\toov_words\toov_sents\tparsefails\tfmeasure\tfmeasure (fail ok)");
+    print!("{}\t", stats.trainsize);
+    print!("{}\t", stats.testsize);
+    print!("{}\t", stats.testmaxlen);
+    print!("{}\t", stats.gram_ext_cnf);
+    print!("{}\t", stats.cky_prep);
+    print!("{}\t", stats.cky_terms);
+    print!("{}\t", stats.cky_higher);
+    print!("{}\t", stats.oov_words);
+    print!("{}\t", stats.oov_sents);
+    print!("{}\t", stats.parsefails);
+    print!("{}\t", stats.fmeasure);
+    print!("{}\n", stats.or_fail_fmeasure);
     
     drop(gold_file);
     drop(best_file);
