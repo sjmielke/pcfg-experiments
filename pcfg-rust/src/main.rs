@@ -22,7 +22,7 @@ struct PCFGParsingStatistics {
     testsize: usize,
     testmaxlen: usize,
     // Times in seconds
-    gram_ext_cnf: f64,
+    gram_ext_bin: f64,
     cky_prep: f64,
     cky_terms: f64,
     cky_higher: f64,
@@ -77,8 +77,8 @@ fn reverse_bijection<V: Clone + Eq + std::hash::Hash, K: Clone + Eq + std::hash:
 enum RHS {
     Terminal(String),
     NTs(Vec<usize>),
-    CNFBin(usize, usize),
-    CNFChain(usize)
+    Binary(usize, usize),
+    Unary(usize)
 }
 
 #[derive(Debug)]
@@ -185,7 +185,7 @@ fn normalize_grammar<'a, I>(rulelist: I) -> HashMap<usize, HashMap<RHS, f64>> wh
     lhs_to_rhs_prob
 }
 
-fn cnfize_grammar(in_rules: &HashMap<usize, HashMap<RHS, f64>>, ntdict: &HashMap<usize, String>) -> (HashMap<usize, HashMap<RHS, f64>>, HashMap<usize, String>) {
+fn binarize_grammar(in_rules: &HashMap<usize, HashMap<RHS, f64>>, ntdict: &HashMap<usize, String>) -> (HashMap<usize, HashMap<RHS, f64>>, HashMap<usize, String>) {
     let mut rev_ntdict: HashMap<String, usize> = reverse_bijection(ntdict);
     
     for nt in rev_ntdict.keys() {
@@ -205,19 +205,19 @@ fn cnfize_grammar(in_rules: &HashMap<usize, HashMap<RHS, f64>>, ntdict: &HashMap
             //println!("{:?}", result);
             
             // root rule has to go last to be popped!
-            result.push(Rule { lhs: lhs, rhs: RHS::CNFBin(rhs[0], newnt_int) });
+            result.push(Rule { lhs: lhs, rhs: RHS::Binary(rhs[0], newnt_int) });
             result
         } else if rhs.len() == 2 {
             // identity
-            vec![Rule { lhs: lhs, rhs: RHS::CNFBin(rhs[0], rhs[1]) }]
+            vec![Rule { lhs: lhs, rhs: RHS::Binary(rhs[0], rhs[1]) }]
         } else if rhs.len() == 1 {
-            vec![Rule { lhs: lhs, rhs: RHS::CNFChain(rhs[0]) }]
+            vec![Rule { lhs: lhs, rhs: RHS::Unary(rhs[0]) }]
         } else {
             panic!("Nullary rule detected!")
         }
     }
     
-    let mut cnf_rules: HashMap<usize, HashMap<RHS, f64>> = HashMap::new();
+    let mut bin_rules: HashMap<usize, HashMap<RHS, f64>> = HashMap::new();
     let mut new_rules_tmp: Vec<Rule> = Vec::new(); // all have prob 1.0
     
     for (lhs, rhsdict) in in_rules {
@@ -225,8 +225,8 @@ fn cnfize_grammar(in_rules: &HashMap<usize, HashMap<RHS, f64>>, ntdict: &HashMap
         for (rhs, &prob) in rhsdict {
             match *rhs {
                 RHS::Terminal(_) => assert!(innermap.insert(rhs.clone(), prob).is_none()),
-                RHS::CNFBin(_, _) => panic!("Already partially CNFized!"),
-                RHS::CNFChain(_) => panic!("Already partially CNFized!"),
+                RHS::Binary(_, _) => panic!("Already partially binarized!"),
+                RHS::Unary(_) => panic!("Already partially binarized!"),
                 RHS::NTs(ref nts) => {
                     let mut newrules = binarize(ntdict, &mut rev_ntdict, *lhs, nts);
                     let Rule { lhs: lhs_, rhs: rhs_ } = newrules.pop().unwrap();
@@ -236,24 +236,24 @@ fn cnfize_grammar(in_rules: &HashMap<usize, HashMap<RHS, f64>>, ntdict: &HashMap
                 }
             }
         }
-        assert!(cnf_rules.insert(lhs.clone(), innermap).is_none())
+        assert!(bin_rules.insert(lhs.clone(), innermap).is_none())
     }
     
     for Rule { lhs, rhs } in new_rules_tmp {
-        cnf_rules.entry(lhs).or_insert_with(HashMap::new).insert(rhs, 1.0);
+        bin_rules.entry(lhs).or_insert_with(HashMap::new).insert(rhs, 1.0);
     }
     
-    (cnf_rules, reverse_bijection(&rev_ntdict))
+    (bin_rules, reverse_bijection(&rev_ntdict))
 }
 
-fn cky_parse<'a>(cnf_rules: &'a HashMap<usize, HashMap<RHS, f64>>, sents: &[String], stats: &mut PCFGParsingStatistics) -> Vec<HashMap<usize, (f64, ParseTree<'a>)>> {
+fn cky_parse<'a>(bin_rules: &'a HashMap<usize, HashMap<RHS, f64>>, sents: &[String], stats: &mut PCFGParsingStatistics) -> Vec<HashMap<usize, (f64, ParseTree<'a>)>> {
     // Build helper dicts for quick access. All are bottom-up in the parse.
     let t = get_usertime();
     let mut word_to_preterminal: HashMap<String, Vec<(usize, (f64, ParseTree))>> = HashMap::new();
     let mut nt_chains: HashMap<usize, Vec<(usize, f64)>> = HashMap::new();
     let mut rhss_to_lhs: HashMap<(usize, usize), Vec<(usize, f64)>> = HashMap::new();
     
-    for (lhs, rhsdict) in cnf_rules {
+    for (lhs, rhsdict) in bin_rules {
         for (rhs, prob) in rhsdict {
             let logprob = prob.ln();
             match *rhs {
@@ -265,16 +265,16 @@ fn cky_parse<'a>(cnf_rules: &'a HashMap<usize, HashMap<RHS, f64>>, sents: &[Stri
                     let tree = ParseTree::InnerNode { label: *lhs, children: vec![tree] };
                     word_to_preterminal.get_mut(s).unwrap().push((*lhs, (logprob, tree)))
                 }
-                RHS::CNFChain(ref r) => {
+                RHS::Unary(ref r) => {
                     if !nt_chains.contains_key(r) {
                         nt_chains.insert(*r, Vec::new());
                     }
                     nt_chains.get_mut(r).unwrap().push((*lhs, logprob))
                 }
-                RHS::CNFBin(ref r1, ref r2) => {
+                RHS::Binary(ref r1, ref r2) => {
                     rhss_to_lhs.entry((*r1, *r2)).or_insert_with(Vec::new).push((*lhs, logprob))
                 }
-                _ => panic!("Trying to use un-CNFized grammar!")
+                _ => panic!("Trying to use unbinarized grammar!")
             }
         }
     }
@@ -462,7 +462,7 @@ fn ptbset(wsj_path: &str, trainsize: usize, testsize: usize, testmaxlen: usize) 
     ((rulelist, ntdict), (devsents, devtrees))
 }
 
-fn print_example(cnf_ntdict: &HashMap<usize, String>, sent: &str, tree: &PTBTree, sorted_candidates: &[(usize, (f64, ParseTree))]) {
+fn print_example(bin_ntdict: &HashMap<usize, String>, sent: &str, tree: &PTBTree, sorted_candidates: &[(usize, (f64, ParseTree))]) {
     if !sorted_candidates.is_empty() {
         println!("{}", sent);
         let mut got_s = false;
@@ -470,8 +470,8 @@ fn print_example(cnf_ntdict: &HashMap<usize, String>, sent: &str, tree: &PTBTree
         println!("  {:28} -> {}", "", tree);
         // Algo
         for &(ref n, (p, ref ptree)) in sorted_candidates.iter().take(10) {
-            println!("  {:10} ({:4.10}) -> {}", cnf_ntdict[n], p, parsetree2ptbtree(cnf_ntdict, &debinarize_parsetree(cnf_ntdict, ptree)));
-            if cnf_ntdict[n] == "S" {
+            println!("  {:10} ({:4.10}) -> {}", bin_ntdict[n], p, parsetree2ptbtree(bin_ntdict, &debinarize_parsetree(bin_ntdict, ptree)));
+            if bin_ntdict[n] == "S" {
                 got_s = true
             }
         }
@@ -479,8 +479,8 @@ fn print_example(cnf_ntdict: &HashMap<usize, String>, sent: &str, tree: &PTBTree
             println!("\t...");
             if !got_s {
                 for &(ref n, (p, ref ptree)) in sorted_candidates {
-                    if cnf_ntdict[n] == "S" {
-                        println!("  {:10} ({:4.10}) -> {}", cnf_ntdict[n], p, parsetree2ptbtree(cnf_ntdict, &debinarize_parsetree(cnf_ntdict, ptree)))
+                    if bin_ntdict[n] == "S" {
+                        println!("  {:10} ({:4.10}) -> {}", bin_ntdict[n], p, parsetree2ptbtree(bin_ntdict, &debinarize_parsetree(bin_ntdict, ptree)))
                     }
                 }
             }
@@ -494,7 +494,7 @@ fn print_example(cnf_ntdict: &HashMap<usize, String>, sent: &str, tree: &PTBTree
 fn main() {
     let mut stats: PCFGParsingStatistics = PCFGParsingStatistics{
         // Placeholders
-        gram_ext_cnf:f64::NAN, cky_prep:f64::NAN, cky_terms:f64::NAN, cky_higher:f64::NAN, oov_words:0, oov_sents:0, parsefails:0, fmeasure:f64::NAN, or_fail_fmeasure:f64::NAN,
+        gram_ext_bin:f64::NAN, cky_prep:f64::NAN, cky_terms:f64::NAN, cky_higher:f64::NAN, oov_words:0, oov_sents:0, parsefails:0, fmeasure:f64::NAN, or_fail_fmeasure:f64::NAN,
         // Values
         trainsize: 7500,
         testsize: 500,
@@ -524,12 +524,12 @@ fn main() {
     let t = get_usertime();
     let ((rulelist, ntdict), (testsents, testtrees)) = ptbset(&wsj_path, stats.trainsize, stats.testsize, stats.testmaxlen);
     let rules = normalize_grammar(rulelist.iter());
-    //println!("Now CNFing!");
-    let (cnf_rules, cnf_ntdict) = cnfize_grammar(&rules, &ntdict);
-    stats.gram_ext_cnf = get_usertime() - t;
+    //println!("Now binarizing!");
+    let (bin_rules, bin_ntdict) = binarize_grammar(&rules, &ntdict);
+    stats.gram_ext_bin = get_usertime() - t;
     
     //println!("Now parsing!");
-    let parses = cky_parse(&cnf_rules, &testsents, &mut stats);
+    let parses = cky_parse(&bin_rules, &testsents, &mut stats);
     
     // Save output for EVALB call
     let tmp_dir = TempDir::new("pcfg-rust").unwrap();
@@ -545,24 +545,24 @@ fn main() {
         let mut candidates: Vec<(usize, (f64, ParseTree))> = Vec::new();
         for (nt, &(p, ref ptree)) in cell {
             // Only keep candidates ending in proper NTs
-            if cnf_ntdict[nt].chars().next().unwrap() != '_' {
+            if bin_ntdict[nt].chars().next().unwrap() != '_' {
                 // Remove inner binarization nodes
-                candidates.push((*nt, (p, debinarize_parsetree(&cnf_ntdict, ptree))))
+                candidates.push((*nt, (p, debinarize_parsetree(&bin_ntdict, ptree))))
             }
         }
         // Sort
         candidates.sort_by(|&(_, (p1, _)), &(_, (p2, _))| p2.partial_cmp(&p1).unwrap_or(std::cmp::Ordering::Equal));
         
-        //print_example(&cnf_ntdict, &sent, &tree, &candidates);
+        //print_example(&bin_ntdict, &sent, &tree, &candidates);
         
         let gold_parse: String = format!("{}", tree);
         let best_parse: String = match candidates.get(0) {
             None => "(( ".to_string() + &sent.replace(" ", ") ( ") + "))",
-            Some(&(_, (_, ref parsetree))) => format!("{}", parsetree2ptbtree(&cnf_ntdict, &parsetree))
+            Some(&(_, (_, ref parsetree))) => format!("{}", parsetree2ptbtree(&bin_ntdict, &parsetree))
         };
         let best_or_fail_parse: String = match candidates.get(0) {
             None => "".to_string(),
-            Some(&(_, (_, ref parsetree))) => format!("{}", parsetree2ptbtree(&cnf_ntdict, &parsetree))
+            Some(&(_, (_, ref parsetree))) => format!("{}", parsetree2ptbtree(&bin_ntdict, &parsetree))
         };
         
         writeln!(gold_file, "{}", gold_parse).unwrap();
@@ -584,11 +584,11 @@ fn main() {
     }
     
     // Print statistics
-    //println!("trainsize\ttestsize\ttestmaxlen\tgram_ext_cnf\tcky_prep\tcky_terms\tcky_higher\toov_words\toov_sents\tparsefails\tfmeasure\tfmeasure (fail ok)");
+    //println!("trainsize\ttestsize\ttestmaxlen\tgram_ext_bin\tcky_prep\tcky_terms\tcky_higher\toov_words\toov_sents\tparsefails\tfmeasure\tfmeasure (fail ok)");
     print!("{}\t", stats.trainsize);
     print!("{}\t", stats.testsize);
     print!("{}\t", stats.testmaxlen);
-    print!("{}\t", stats.gram_ext_cnf);
+    print!("{}\t", stats.gram_ext_bin);
     print!("{}\t", stats.cky_prep);
     print!("{}\t", stats.cky_terms);
     print!("{}\t", stats.cky_higher);
