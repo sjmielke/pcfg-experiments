@@ -11,7 +11,7 @@ use std::io::Write;
 use tempdir::TempDir;
 
 extern crate argparse;
-use argparse::{ArgumentParser, Store};
+use argparse::{ArgumentParser, Store, StoreTrue};
 
 extern crate ptb_reader;
 use ptb_reader::PTBTree;
@@ -246,33 +246,29 @@ fn binarize_grammar(in_rules: &HashMap<usize, HashMap<RHS, f64>>, ntdict: &HashM
     (bin_rules, reverse_bijection(&rev_ntdict))
 }
 
-fn cky_parse<'a>(bin_rules: &'a HashMap<usize, HashMap<RHS, f64>>, sents: &[String], stats: &mut PCFGParsingStatistics) -> Vec<HashMap<usize, (f64, ParseTree<'a>)>> {
+fn cky_parse<'a>(bin_rules: &'a HashMap<usize, HashMap<RHS, f64>>, sents: &[String], stats: &mut PCFGParsingStatistics, oov_wildcard: bool) -> Vec<HashMap<usize, (f64, ParseTree<'a>)>> {
     // Build helper dicts for quick access. All are bottom-up in the parse.
     let t = get_usertime();
     let mut word_to_preterminal: HashMap<String, Vec<(usize, (f64, ParseTree))>> = HashMap::new();
     let mut nt_chains: HashMap<usize, Vec<(usize, f64)>> = HashMap::new();
     let mut rhss_to_lhs: HashMap<(usize, usize), Vec<(usize, f64)>> = HashMap::new();
+    let mut oov_standard_preterminals: HashMap<usize, (f64, ParseTree)> = HashMap::new();
     
     for (lhs, rhsdict) in bin_rules {
         for (rhs, prob) in rhsdict {
             let logprob = prob.ln();
             match *rhs {
                 RHS::Terminal(ref s) => {
-                    if !word_to_preterminal.contains_key(s) {
-                        word_to_preterminal.insert(s.clone(), Vec::new());
-                    }
                     let tree = ParseTree::TerminalNode { label: s };
                     let tree = ParseTree::InnerNode { label: *lhs, children: vec![tree] };
-                    word_to_preterminal.get_mut(s).unwrap().push((*lhs, (logprob, tree)))
+                    word_to_preterminal.entry(s.clone()).or_insert_with(Vec::new).push((*lhs, (logprob, tree.clone())));
+                    oov_standard_preterminals.insert(*lhs, (0.0, tree));
                 }
-                RHS::Unary(ref r) => {
-                    if !nt_chains.contains_key(r) {
-                        nt_chains.insert(*r, Vec::new());
-                    }
-                    nt_chains.get_mut(r).unwrap().push((*lhs, logprob))
+                RHS::Unary(r) => {
+                    nt_chains.entry(r).or_insert_with(Vec::new).push((*lhs, logprob))
                 }
-                RHS::Binary(ref r1, ref r2) => {
-                    rhss_to_lhs.entry((*r1, *r2)).or_insert_with(Vec::new).push((*lhs, logprob))
+                RHS::Binary(r1, r2) => {
+                    rhss_to_lhs.entry((r1, r2)).or_insert_with(Vec::new).push((*lhs, logprob))
                 }
                 _ => panic!("Trying to use unbinarized grammar!")
             }
@@ -305,7 +301,11 @@ fn cky_parse<'a>(bin_rules: &'a HashMap<usize, HashMap<RHS, f64>>, sents: &[Stri
                 None => {
                     stats.oov_words += 1;
                     oov_in_this_sent = true;
-                    HashMap::new()
+                    if oov_wildcard {
+                        oov_standard_preterminals.clone()
+                    } else {
+                        HashMap::new()
+                    }
                 }
             };
             ckychart.insert((i, i), terminals);
@@ -449,8 +449,8 @@ fn ptbset(wsj_path: &str, trainsize: usize, testsize: usize, testmaxlen: usize) 
     let mut devsents: Vec<String> = Vec::new();
     let mut devtrees: Vec<PTBTree> = Vec::new();
     for mut t in read_devtrees {
+        t.strip_predicate_annotations();
         if t.front_length() <= testmaxlen && devtrees.len() < testsize {
-            t.strip_predicate_annotations();
             devsents.push(t.front());
             devtrees.push(t);
         }
@@ -502,6 +502,7 @@ fn main() {
     };
     
     let mut wsj_path: String = "/home/sjm/documents/Uni/FuzzySP/treebank-3_LDC99T42/treebank_3/parsed/mrg/wsj".to_string();
+    let mut oov_wildcard = false;
     
     { // this block limits scope of borrows by ap.refer() method
         let mut ap = ArgumentParser::new();
@@ -515,6 +516,9 @@ fn main() {
         ap.refer(&mut stats.testmaxlen)
             .add_option(&["--testmaxlen"], Store,
             "Maximum length of each test sentence (words)");
+        ap.refer(&mut oov_wildcard)
+            .add_option(&["--oovwildcard"], StoreTrue,
+            "Accept every possible preterminal for OOVs");
         ap.refer(&mut wsj_path)
             .add_option(&["--wsjpath"], Store,
             "Path of WSL merged data (.../treebank_3/parsed/mrg/wsj)");
@@ -529,7 +533,7 @@ fn main() {
     stats.gram_ext_bin = get_usertime() - t;
     
     //println!("Now parsing!");
-    let parses = cky_parse(&bin_rules, &testsents, &mut stats);
+    let parses = cky_parse(&bin_rules, &testsents, &mut stats, oov_wildcard);
     
     // Save output for EVALB call
     let tmp_dir = TempDir::new("pcfg-rust").unwrap();
