@@ -11,7 +11,7 @@ use std::io::Write;
 use tempdir::TempDir;
 
 extern crate argparse;
-use argparse::{ArgumentParser, Store, StoreTrue};
+use argparse::{ArgumentParser, Store, StoreOption};
 
 extern crate ptb_reader;
 use ptb_reader::PTBTree;
@@ -21,6 +21,7 @@ struct PCFGParsingStatistics {
     trainsize: usize,
     testsize: usize,
     testmaxlen: usize,
+    oov_logprob: Option<f64>,
     // Times in seconds
     gram_ext_bin: f64,
     cky_prep: f64,
@@ -246,7 +247,7 @@ fn binarize_grammar(in_rules: &HashMap<usize, HashMap<RHS, f64>>, ntdict: &HashM
     (bin_rules, reverse_bijection(&rev_ntdict))
 }
 
-fn cky_parse<'a>(bin_rules: &'a HashMap<usize, HashMap<RHS, f64>>, sents: &'a [String], stats: &mut PCFGParsingStatistics, oov_wildcard: bool) -> Vec<HashMap<usize, (f64, ParseTree<'a>)>> {
+fn cky_parse<'a>(bin_rules: &'a HashMap<usize, HashMap<RHS, f64>>, sents: &'a [String], stats: &mut PCFGParsingStatistics) -> Vec<HashMap<usize, (f64, ParseTree<'a>)>> {
     // Build helper dicts for quick access. All are bottom-up in the parse.
     let t = get_usertime();
     let mut word_to_preterminal: HashMap<String, Vec<(usize, (f64, ParseTree))>> = HashMap::new();
@@ -302,10 +303,9 @@ fn cky_parse<'a>(bin_rules: &'a HashMap<usize, HashMap<RHS, f64>>, sents: &'a [S
                 None => {
                     stats.oov_words += 1;
                     oov_in_this_sent = true;
-                    if oov_wildcard {
-                        preterminals.clone().into_iter().map(|p| (p, (0.0, ParseTree::InnerNode { label: p, children: vec![ParseTree::TerminalNode { label: w }] }))).collect()
-                    } else {
-                        HashMap::new()
+                    match stats.oov_logprob {
+                        Some(lp) => preterminals.clone().into_iter().map(|pt| (pt, (lp, ParseTree::InnerNode { label: pt, children: vec![ParseTree::TerminalNode { label: w }] }))).collect(),
+                        None => HashMap::new()
                     }
                 }
             };
@@ -498,11 +498,11 @@ fn main() {
         // Values
         trainsize: 7500,
         testsize: 500,
-        testmaxlen: 40
+        testmaxlen: 40,
+        oov_logprob: None
     };
     
     let mut wsj_path: String = "/home/sjm/documents/Uni/FuzzySP/treebank-3_LDC99T42/treebank_3/parsed/mrg/wsj".to_string();
-    let mut oov_wildcard = false;
     
     { // this block limits scope of borrows by ap.refer() method
         let mut ap = ArgumentParser::new();
@@ -516,9 +516,9 @@ fn main() {
         ap.refer(&mut stats.testmaxlen)
             .add_option(&["--testmaxlen"], Store,
             "Maximum length of each test sentence (words)");
-        ap.refer(&mut oov_wildcard)
-            .add_option(&["--oovwildcard"], StoreTrue,
-            "Accept every possible preterminal for OOVs");
+        ap.refer(&mut stats.oov_logprob)
+            .add_option(&["--oovlogprob"], StoreOption,
+            "Uniform log probability for all preterminals given an OOV");
         ap.refer(&mut wsj_path)
             .add_option(&["--wsjpath"], Store,
             "Path of WSL merged data (.../treebank_3/parsed/mrg/wsj)");
@@ -533,7 +533,7 @@ fn main() {
     stats.gram_ext_bin = get_usertime() - t;
     
     //println!("Now parsing!");
-    let parses = cky_parse(&bin_rules, &testsents, &mut stats, oov_wildcard);
+    let parses = cky_parse(&bin_rules, &testsents, &mut stats);
     
     // Save output for EVALB call
     let tmp_dir = TempDir::new("pcfg-rust").unwrap();
@@ -592,6 +592,7 @@ fn main() {
     print!("{}\t", stats.trainsize);
     print!("{}\t", stats.testsize);
     print!("{}\t", stats.testmaxlen);
+    print!("{}\t", stats.oov_logprob.map(|lp| format!("{}", lp)).unwrap_or("-none-".to_string()));
     print!("{}\t", stats.gram_ext_bin);
     print!("{}\t", stats.cky_prep);
     print!("{}\t", stats.cky_terms);
