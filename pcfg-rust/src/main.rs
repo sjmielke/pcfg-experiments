@@ -1,7 +1,7 @@
 //#![feature(alloc_system)]
 //extern crate alloc_system;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::f64; // log and exp
 use std::process::Command;
 
@@ -246,13 +246,13 @@ fn binarize_grammar(in_rules: &HashMap<usize, HashMap<RHS, f64>>, ntdict: &HashM
     (bin_rules, reverse_bijection(&rev_ntdict))
 }
 
-fn cky_parse<'a>(bin_rules: &'a HashMap<usize, HashMap<RHS, f64>>, sents: &[String], stats: &mut PCFGParsingStatistics, oov_wildcard: bool) -> Vec<HashMap<usize, (f64, ParseTree<'a>)>> {
+fn cky_parse<'a>(bin_rules: &'a HashMap<usize, HashMap<RHS, f64>>, sents: &'a [String], stats: &mut PCFGParsingStatistics, oov_wildcard: bool) -> Vec<HashMap<usize, (f64, ParseTree<'a>)>> {
     // Build helper dicts for quick access. All are bottom-up in the parse.
     let t = get_usertime();
     let mut word_to_preterminal: HashMap<String, Vec<(usize, (f64, ParseTree))>> = HashMap::new();
     let mut nt_chains: HashMap<usize, Vec<(usize, f64)>> = HashMap::new();
     let mut rhss_to_lhs: HashMap<(usize, usize), Vec<(usize, f64)>> = HashMap::new();
-    let mut oov_standard_preterminals: HashMap<usize, (f64, ParseTree)> = HashMap::new();
+    let mut preterminals: HashSet<usize> = HashSet::new();
     
     for (lhs, rhsdict) in bin_rules {
         for (rhs, prob) in rhsdict {
@@ -262,7 +262,7 @@ fn cky_parse<'a>(bin_rules: &'a HashMap<usize, HashMap<RHS, f64>>, sents: &[Stri
                     let tree = ParseTree::TerminalNode { label: s };
                     let tree = ParseTree::InnerNode { label: *lhs, children: vec![tree] };
                     word_to_preterminal.entry(s.clone()).or_insert_with(Vec::new).push((*lhs, (logprob, tree.clone())));
-                    oov_standard_preterminals.insert(*lhs, (0.0, tree));
+                    preterminals.insert(*lhs);
                 }
                 RHS::Unary(r) => {
                     nt_chains.entry(r).or_insert_with(Vec::new).push((*lhs, logprob))
@@ -274,6 +274,7 @@ fn cky_parse<'a>(bin_rules: &'a HashMap<usize, HashMap<RHS, f64>>, sents: &[Stri
             }
         }
     }
+    let preterminals: Vec<usize> = preterminals.into_iter().collect();
     stats.cky_prep = get_usertime() - t;
     
     stats.cky_terms = 0.0;
@@ -302,7 +303,7 @@ fn cky_parse<'a>(bin_rules: &'a HashMap<usize, HashMap<RHS, f64>>, sents: &[Stri
                     stats.oov_words += 1;
                     oov_in_this_sent = true;
                     if oov_wildcard {
-                        oov_standard_preterminals.clone()
+                        preterminals.clone().into_iter().map(|p| (p, (0.0, ParseTree::InnerNode { label: p, children: vec![ParseTree::TerminalNode { label: w }] }))).collect()
                     } else {
                         HashMap::new()
                     }
@@ -444,7 +445,6 @@ fn ptbset(wsj_path: &str, trainsize: usize, testsize: usize, testmaxlen: usize) 
     
     //println!("Reading, stripping and yielding test sentences...");
     let read_devtrees = ptb_reader::parse_ptb_sections(wsj_path, vec![22]);
-    let read_devtrees_len = read_devtrees.len();
     
     let mut devsents: Vec<String> = Vec::new();
     let mut devtrees: Vec<PTBTree> = Vec::new();
@@ -456,7 +456,7 @@ fn ptbset(wsj_path: &str, trainsize: usize, testsize: usize, testmaxlen: usize) 
         }
     }
     assert_eq!(devtrees.len(), testsize);
-    //println!("From {} candidates we took {} dev sentences (max length {})!", read_devtrees_len, devtrees.len(), testmaxlen);
+    //println!("From {} candidates we took {} dev sentences (max length {})!", read_devtrees.len(), devtrees.len(), testmaxlen);
     
     //println!("PTB set done!");
     ((rulelist, ntdict), (devsents, devtrees))
@@ -498,7 +498,7 @@ fn main() {
         // Values
         trainsize: 7500,
         testsize: 500,
-        testmaxlen: 30
+        testmaxlen: 40
     };
     
     let mut wsj_path: String = "/home/sjm/documents/Uni/FuzzySP/treebank-3_LDC99T42/treebank_3/parsed/mrg/wsj".to_string();
