@@ -11,17 +11,49 @@ use std::io::Write;
 use tempdir::TempDir;
 
 extern crate argparse;
-use argparse::{ArgumentParser, Store, StoreOption};
+use argparse::{ArgumentParser, Store};
 
 extern crate ptb_reader;
 use ptb_reader::PTBTree;
+
+enum OOVHandling {
+    /// Fail on every OOV (standard, fastest)
+    Zero,
+    /// Accept every POS tag with e^{-300} probability
+    Uniform,
+    /// Accept every POS tag with (c_POS/sum_POS' c_POS') * e^{-300} probability
+    Marginal
+}
+
+impl std::fmt::Display for OOVHandling {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match *self {
+            OOVHandling::Zero => write!(f, "zero"),
+            OOVHandling::Uniform => write!(f, "uniform"),
+            OOVHandling::Marginal => write!(f, "marginal")
+        }
+    }
+}
+impl std::str::FromStr for OOVHandling {
+    type Err = String;
+    
+    fn from_str(s: &str) -> Result<OOVHandling, String> {
+        match s {
+            "zero" => Ok(OOVHandling::Zero),
+            "uniform" => Ok(OOVHandling::Uniform),
+            "marginal" => Ok(OOVHandling::Marginal),
+            _ => Err(format!("Invalid OOV handling parameter »{}«", s))
+        }
+    }
+}
 
 struct PCFGParsingStatistics {
     // Raw numbers
     trainsize: usize,
     testsize: usize,
     testmaxlen: usize,
-    oov_logprob: Option<f64>,
+    oov_handling: OOVHandling,
+    // TODO add flag for OOV-like handling fallback of known words!
     // Times in seconds
     gram_ext_bin: f64,
     cky_prep: f64,
@@ -303,9 +335,10 @@ fn cky_parse<'a>(bin_rules: &'a HashMap<usize, HashMap<RHS, f64>>, sents: &'a [S
                 None => {
                     stats.oov_words += 1;
                     oov_in_this_sent = true;
-                    match stats.oov_logprob {
-                        Some(lp) => preterminals.clone().into_iter().map(|pt| (pt, (lp, ParseTree::InnerNode { label: pt, children: vec![ParseTree::TerminalNode { label: w }] }))).collect(),
-                        None => HashMap::new()
+                    match stats.oov_handling {
+                        OOVHandling::Zero => HashMap::new(),
+                        OOVHandling::Uniform => preterminals.clone().into_iter().map(|pt| (pt, (-300.0, ParseTree::InnerNode { label: pt, children: vec![ParseTree::TerminalNode { label: w }] }))).collect(),
+                        OOVHandling::Marginal => panic!("Unimplemented")
                     }
                 }
             };
@@ -499,7 +532,7 @@ fn main() {
         trainsize: 7500,
         testsize: 500,
         testmaxlen: 40,
-        oov_logprob: None
+        oov_handling: OOVHandling::Zero
     };
     
     let mut wsj_path: String = "/home/sjm/documents/Uni/FuzzySP/treebank-3_LDC99T42/treebank_3/parsed/mrg/wsj".to_string();
@@ -516,9 +549,9 @@ fn main() {
         ap.refer(&mut stats.testmaxlen)
             .add_option(&["--testmaxlen"], Store,
             "Maximum length of each test sentence (words)");
-        ap.refer(&mut stats.oov_logprob)
-            .add_option(&["--oovlogprob"], StoreOption,
-            "Uniform log probability for all preterminals given an OOV");
+        ap.refer(&mut stats.oov_handling)
+            .add_option(&["--oovhandling"], Store,
+            "OOV->POS handling: Zero (default), Uniform or Marginal");
         ap.refer(&mut wsj_path)
             .add_option(&["--wsjpath"], Store,
             "Path of WSL merged data (.../treebank_3/parsed/mrg/wsj)");
@@ -531,6 +564,9 @@ fn main() {
     //println!("Now binarizing!");
     let (bin_rules, bin_ntdict) = binarize_grammar(&rules, &ntdict);
     stats.gram_ext_bin = get_usertime() - t;
+    
+    println!("{} -> {}", ntdict.len(), bin_ntdict.len());
+    unreachable!();
     
     //println!("Now parsing!");
     let parses = cky_parse(&bin_rules, &testsents, &mut stats);
@@ -588,11 +624,11 @@ fn main() {
     }
     
     // Print statistics
-    //println!("trainsize\ttestsize\ttestmaxlen\tgram_ext_bin\tcky_prep\tcky_terms\tcky_higher\toov_words\toov_sents\tparsefails\tfmeasure\tfmeasure (fail ok)");
+    //println!("trainsize\ttestsize\ttestmaxlen\toov_handling\tgram_ext_bin\tcky_prep\tcky_terms\tcky_higher\toov_words\toov_sents\tparsefails\tfmeasure\tfmeasure (fail ok)");
     print!("{}\t", stats.trainsize);
     print!("{}\t", stats.testsize);
     print!("{}\t", stats.testmaxlen);
-    print!("{}\t", stats.oov_logprob.map(|lp| format!("{}", lp)).unwrap_or("-none-".to_string()));
+    print!("{}\t", stats.oov_handling);
     print!("{}\t", stats.gram_ext_bin);
     print!("{}\t", stats.cky_prep);
     print!("{}\t", stats.cky_terms);
