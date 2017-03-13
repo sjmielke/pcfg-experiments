@@ -1,23 +1,25 @@
 // ######################################## Rules, trees ##########################################
 
+pub type NT = usize;
+
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum RHS {
     Terminal(String),
-    NTs(Vec<usize>),
-    Binary(usize, usize),
-    Unary(usize)
+    NTs(Vec<NT>),
+    Binary(NT, NT),
+    Unary(NT)
 }
 
 #[derive(Debug)]
 pub struct Rule {
-    pub lhs: usize,
+    pub lhs: NT,
     pub rhs: RHS
 }
 
 #[derive(Debug, Clone)]
 pub enum ParseTree<'a> {
     InnerNode {
-        label: usize,
+        label: NT,
         children: Vec<ParseTree<'a>>
     },
     TerminalNode {

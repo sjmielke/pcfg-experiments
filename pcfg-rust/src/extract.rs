@@ -17,7 +17,13 @@ fn reverse_bijection<
     outdict
 }
 
-fn treat_nt(rev_ntdict: &mut HashMap<String, usize>, nt: &str) -> usize {
+fn incr_in_innermap<T: Eq + ::std::hash::Hash>(l: NT, r: T, outermap: &mut HashMap<NT, HashMap<T, usize>>) {
+    let innermap = outermap.entry(l).or_insert_with(HashMap::new);
+    let newcount = innermap.get(&r).unwrap_or(&0) + 1;
+    innermap.insert(r, newcount);
+}
+
+fn treat_nt(rev_ntdict: &mut HashMap<String, NT>, nt: &str) -> NT {
     match rev_ntdict.get(nt) {
         Some(&i) => i,
         None => {
@@ -29,43 +35,14 @@ fn treat_nt(rev_ntdict: &mut HashMap<String, usize>, nt: &str) -> usize {
     }
 }
 
-fn normalize_grammar<'a, I>(rulelist: I) -> HashMap<usize, HashMap<RHS, f64>> where I: Iterator<Item=&'a Rule> {
-    let mut lhs_to_rhs_count: HashMap<usize, HashMap<RHS, usize>> = HashMap::new();
-    
-    for r in rulelist {
-        let innermap = lhs_to_rhs_count.entry(r.lhs).or_insert_with(HashMap::new);
-        
-        let newcount = match innermap.get(&r.rhs) {
-            Some(&count) => count + 1,
-            None => 1
-        };
-        innermap.insert(r.rhs.clone(), newcount);
-    }
-    
-    let mut lhs_to_rhs_prob: HashMap<usize, HashMap<RHS, f64>> = HashMap::new();
-    
-    for (lhs, rhsdict) in lhs_to_rhs_count {
-        let mut innermap = HashMap::new();
-        let z: usize = rhsdict.values().sum();
-        let z: f64 = z as f64;
-        for (rhs, count) in rhsdict {
-            innermap.insert(rhs, (count as f64) / z);
-        }
-        
-        lhs_to_rhs_prob.insert(lhs, innermap);
-    }
-    
-    lhs_to_rhs_prob
-}
-
-pub fn binarize_grammar(in_rules: &HashMap<usize, HashMap<RHS, f64>>, ntdict: &HashMap<usize, String>) -> (HashMap<usize, HashMap<RHS, f64>>, HashMap<usize, String>) {
-    let mut rev_ntdict: HashMap<String, usize> = reverse_bijection(ntdict);
+pub fn binarize_grammar(in_rules: &HashMap<NT, HashMap<RHS, f64>>, ntdict: &HashMap<NT, String>) -> (HashMap<NT, HashMap<RHS, f64>>, HashMap<NT, String>) {
+    let mut rev_ntdict: HashMap<String, NT> = reverse_bijection(ntdict);
     
     for nt in rev_ntdict.keys() {
         assert!(!nt.contains("_"));
     }
     
-    fn binarize(ntdict: &HashMap<usize, String>, rev_ntdict: &mut HashMap<String, usize>, lhs: usize, rhs: &[usize]) -> Vec<Rule> {
+    fn binarize(ntdict: &HashMap<NT, String>, rev_ntdict: &mut HashMap<String, NT>, lhs: NT, rhs: &[NT]) -> Vec<Rule> {
         if rhs.len() > 2 {
             // right-branching
             let rest = &rhs[1..rhs.len()];
@@ -90,12 +67,12 @@ pub fn binarize_grammar(in_rules: &HashMap<usize, HashMap<RHS, f64>>, ntdict: &H
         }
     }
     
-    let mut bin_rules: HashMap<usize, HashMap<RHS, f64>> = HashMap::new();
+    let mut bin_rules: HashMap<NT, HashMap<RHS, f64>> = HashMap::new();
     let mut new_rules_tmp: Vec<Rule> = Vec::new(); // all have prob 1.0
     
-    for (lhs, rhsdict) in in_rules {
+    for (lhs, rhsmap) in in_rules {
         let mut innermap: HashMap<RHS, f64> = HashMap::new();
-        for (rhs, &prob) in rhsdict {
+        for (rhs, &prob) in rhsmap {
             match *rhs {
                 RHS::Terminal(_) => assert!(innermap.insert(rhs.clone(), prob).is_none()),
                 RHS::Binary(_, _) => panic!("Already partially binarized!"),
@@ -119,69 +96,62 @@ pub fn binarize_grammar(in_rules: &HashMap<usize, HashMap<RHS, f64>>, ntdict: &H
     (bin_rules, reverse_bijection(&rev_ntdict))
 }
 
-fn ptbrulelist(wsj_path: &str, trainsize: usize) -> (Vec<Rule>, HashMap<usize, String>) {
-    //println!("Reading in the PTB train set...");
+pub fn ptb_train(wsj_path: &str, stats: &mut PCFGParsingStatistics) -> (HashMap<NT, HashMap<RHS, f64>>, HashMap<NT, String>) {
     let mut train_trees = ptb_reader::parse_ptb_sections(wsj_path, (2..22).collect()); // sections 2-21
-    //println!("Read in a total of {} trees, but limiting them to trainsize = {} trees.", train_trees.len(), trainsize);
+    //println!("Read in a total of {} trees, but limiting them to trainsize = {} trees.", train_trees.len(), stats.trainsize);
     
-    assert!(train_trees.len() >= trainsize);
+    assert!(train_trees.len() >= stats.trainsize);
     
-    //println!("Removing unwanted annotations from train...");
-    for ref mut t in &mut train_trees {
-        t.strip_predicate_annotations()
-    }
+    let mut lhs_to_rhs_count: HashMap<NT, HashMap<RHS, usize>> = HashMap::new();
+    let mut rev_ntdict: HashMap<String, NT> = HashMap::new();
     
-    //println!("Reading off rules from train...");
-    let mut rulelist: Vec<Rule> = Vec::new();
-    let mut rev_ntdict: HashMap<String, usize> = HashMap::new();
-    
-    fn getrules(t: &PTBTree, rulelist: &mut Vec<Rule>, rev_ntdict: &mut HashMap<String, usize>) {
+    fn readoff_rules_into(t: &PTBTree, lhs_to_rhs_count: &mut HashMap<NT, HashMap<RHS, usize>>, rev_ntdict: &mut HashMap<String, NT>) {
         match *t {
             PTBTree::InnerNode { ref label, ref children } => {
                 let lhs = treat_nt(rev_ntdict, label);
-                // Terminal case
+                // Terminal case maybe?
                 if children.len() == 1 {
                     if let PTBTree::TerminalNode { ref label } = children[0] {
-                        rulelist.push(Rule { lhs: lhs, rhs: RHS::Terminal(label.to_string()) });
+                        incr_in_innermap(lhs, RHS::Terminal(label.to_string()), lhs_to_rhs_count);
                         return
-                    }
+                    } // else continue with NT case
                 }
                 // Other (NT) case
-                let mut child_ids: Vec<usize> = Vec::new();
+                let mut child_ids: Vec<NT> = Vec::new();
                 for c in children {
                     let s = match *c {
                         PTBTree::InnerNode { ref label, .. } | PTBTree::TerminalNode { ref label } => label
                     };
                     child_ids.push(treat_nt(rev_ntdict, s));
-                    getrules(c, rulelist, rev_ntdict);
+                    readoff_rules_into(c, lhs_to_rhs_count, rev_ntdict);
                 }
-                let r = Rule { lhs: lhs, rhs: RHS::NTs(child_ids) };
-                rulelist.push(r);
+                incr_in_innermap(lhs, RHS::NTs(child_ids), lhs_to_rhs_count);
             }
             _ => {
-                panic!("Unusable tree!")
+                panic!("Unusable tree (maybe you don't have proper preterminals?)!")
             }
         }
     }
     
-    for t in &train_trees[0..trainsize] {
-        //println!("{}", t);
-        getrules(t, &mut rulelist, &mut rev_ntdict);
+    for ref mut t in &mut train_trees[0..stats.trainsize] {
+        t.strip_predicate_annotations();
+        readoff_rules_into(t, &mut lhs_to_rhs_count, &mut rev_ntdict);
     }
     
-    //println!("From {} trees: NTs: {}, Rules: {}", &train_trees[0..2000].len(), rev_ntdict.len(), rulelist.len());
+    // Normalize grammar
+    let mut lhs_to_rhs_prob: HashMap<NT, HashMap<RHS, f64>> = HashMap::new();
     
-    let ntdict = reverse_bijection(&rev_ntdict);
+    for (lhs, rhsmap) in lhs_to_rhs_count {
+        let mut innermap = HashMap::new();
+        let z: usize = rhsmap.values().sum();
+        let z: f64 = z as f64;
+        for (rhs, count) in rhsmap {
+            innermap.insert(rhs, (count as f64) / z);
+        }
+        lhs_to_rhs_prob.insert(lhs, innermap);
+    }
     
-    
-    //println!("PTB set done!");
-    (rulelist, ntdict)
-}
-
-pub fn ptb_train(wsj_path: &str, stats: &mut PCFGParsingStatistics) -> (HashMap<usize, HashMap<RHS, f64>>, HashMap<usize, String>) {
-    let (rulelist, ntdict) = ptbrulelist(wsj_path, stats.trainsize);
-    let rules = normalize_grammar(rulelist.iter());
-    (rules, ntdict)
+    (lhs_to_rhs_prob, reverse_bijection(&rev_ntdict))
 }
 
 pub fn ptb_test(wsj_path: &str, stats: &PCFGParsingStatistics) -> (Vec<String>, Vec<PTBTree>) {
