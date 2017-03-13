@@ -18,7 +18,7 @@ use defs::*;
 mod extract;
 mod parse;
 
-fn parsetree2ptbtree(ntdict: &HashMap<usize, String>, t: &ParseTree) -> PTBTree {
+fn parsetree2ptbtree(ntdict: &HashMap<NT, String>, t: &ParseTree) -> PTBTree {
     match *t {
         ParseTree::TerminalNode { label } => {
             PTBTree::TerminalNode { label: label.to_string() }
@@ -30,7 +30,7 @@ fn parsetree2ptbtree(ntdict: &HashMap<usize, String>, t: &ParseTree) -> PTBTree 
     }
 }
 
-fn debinarize_parsetree<'a>(ntdict: &HashMap<usize, String>, t: &ParseTree<'a>) -> ParseTree<'a> {
+fn debinarize_parsetree<'a>(ntdict: &HashMap<NT, String>, t: &ParseTree<'a>) -> ParseTree<'a> {
     match *t {
         ParseTree::TerminalNode { label } => ParseTree::TerminalNode { label },
         ParseTree::InnerNode { label, ref children } => {
@@ -65,7 +65,7 @@ fn debinarize_parsetree<'a>(ntdict: &HashMap<usize, String>, t: &ParseTree<'a>) 
 }
 
 #[allow(dead_code)]
-fn print_example(bin_ntdict: &HashMap<usize, String>, sent: &str, tree: &PTBTree, sorted_candidates: &[(usize, (f64, ParseTree))]) {
+fn print_example(bin_ntdict: &HashMap<NT, String>, sent: &str, tree: &PTBTree, sorted_candidates: &[(NT, (f64, ParseTree))]) {
     if !sorted_candidates.is_empty() {
         println!("{}", sent);
         let mut got_s = false;
@@ -149,7 +149,7 @@ fn main() {
     
     for ((sent, tree), cell) in testsents.iter().zip(testtrees).zip(parses.iter()) {
         // Remove binarization traces
-        let mut candidates: Vec<(usize, (f64, ParseTree))> = Vec::new();
+        let mut candidates: Vec<(NT, (f64, ParseTree))> = Vec::new();
         for (nt, &(p, ref ptree)) in cell {
             // Only keep candidates ending in proper NTs
             if bin_ntdict[nt].chars().next().unwrap() != '_' {
@@ -192,6 +192,7 @@ fn main() {
     
     stats.print(false);
     
+    // safely close to get error messages just in case
     drop(gold_file);
     drop(best_file);
     tmp_dir.close().unwrap();

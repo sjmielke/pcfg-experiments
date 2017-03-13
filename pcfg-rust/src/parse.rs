@@ -2,13 +2,13 @@ use std::collections::{HashMap, HashSet};
 
 use defs::*;
 
-pub fn cky_parse<'a>(bin_rules: &'a HashMap<usize, HashMap<RHS, f64>>, sents: &'a [String], stats: &mut PCFGParsingStatistics) -> Vec<HashMap<usize, (f64, ParseTree<'a>)>> {
+pub fn cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, sents: &'a [String], stats: &mut PCFGParsingStatistics) -> Vec<HashMap<NT, (f64, ParseTree<'a>)>> {
     // Build helper dicts for quick access. All are bottom-up in the parse.
     let t = get_usertime();
-    let mut word_to_preterminal: HashMap<String, Vec<(usize, (f64, ParseTree))>> = HashMap::new();
-    let mut nt_chains: HashMap<usize, Vec<(usize, f64)>> = HashMap::new();
-    let mut rhss_to_lhs: HashMap<(usize, usize), Vec<(usize, f64)>> = HashMap::new();
-    let mut preterminals: HashSet<usize> = HashSet::new();
+    let mut word_to_preterminal: HashMap<String, Vec<(NT, (f64, ParseTree))>> = HashMap::new();
+    let mut nt_chains: HashMap<NT, Vec<(NT, f64)>> = HashMap::new();
+    let mut rhss_to_lhs: HashMap<(NT, NT), Vec<(NT, f64)>> = HashMap::new();
+    let mut preterminals: HashSet<NT> = HashSet::new();
     
     for (lhs, rhsdict) in bin_rules {
         for (rhs, prob) in rhsdict {
@@ -30,13 +30,13 @@ pub fn cky_parse<'a>(bin_rules: &'a HashMap<usize, HashMap<RHS, f64>>, sents: &'
             }
         }
     }
-    let preterminals: Vec<usize> = preterminals.into_iter().collect();
+    let preterminals: Vec<NT> = preterminals.into_iter().collect();
     stats.cky_prep = get_usertime() - t;
     
     stats.cky_terms = 0.0;
     stats.cky_higher = 0.0;
     
-    let mut results: Vec<HashMap<usize, (f64, ParseTree<'a>)>> = Vec::new();
+    let mut results: Vec<HashMap<NT, (f64, ParseTree<'a>)>> = Vec::new();
     
     for raw_sent in sents {
         //println!("parsing: {}", raw_sent);
@@ -47,13 +47,13 @@ pub fn cky_parse<'a>(bin_rules: &'a HashMap<usize, HashMap<RHS, f64>>, sents: &'
         let sent: Vec<&str> = raw_sent.split(' ').collect();
         
         // Now populate a chart (0-based indexing)!
-        let mut ckychart: HashMap<(usize, usize), HashMap<usize, (f64, ParseTree)>> = HashMap::new();
+        let mut ckychart: HashMap<(NT, NT), HashMap<NT, (f64, ParseTree)>> = HashMap::new();
         
         // Populate leafs
         let t = get_usertime();
         for (i,w) in sent.iter().enumerate() {
             // TODO actually could just break if we don't recognize terminals :D
-            let terminals: HashMap<usize, (f64, ParseTree)> = match word_to_preterminal.get(*w) {
+            let terminals: HashMap<NT, (f64, ParseTree)> = match word_to_preterminal.get(*w) {
                 Some(prets) => prets.iter().cloned().collect(),
                 None => {
                     stats.oov_words += 1;
@@ -75,7 +75,7 @@ pub fn cky_parse<'a>(bin_rules: &'a HashMap<usize, HashMap<RHS, f64>>, sents: &'
         for width in 2 .. sent.len() + 1 {
             for start in 0 .. sent.len() + 1 - width {
                 let end = start + width;
-                let mut cell: HashMap<usize, (f64, ParseTree)> = HashMap::new();
+                let mut cell: HashMap<NT, (f64, ParseTree)> = HashMap::new();
                 
                 // get new ones from bin rules
                 for sp in start + 1 .. end {
