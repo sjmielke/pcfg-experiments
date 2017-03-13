@@ -94,6 +94,30 @@ fn print_example(bin_ntdict: &HashMap<NT, String>, sent: &str, tree: &PTBTree, s
     }
 }
 
+fn prepare_candidates<'a>(cell: &HashMap<NT, (f64, ParseTree<'a>)>, bin_ntdict: &HashMap<NT, String>) -> Vec<(NT, (f64, ParseTree<'a>))> {
+    // Remove binarization traces
+    let mut candidates: Vec<(NT, (f64, ParseTree))> = Vec::new();
+    for (nt, &(p, ref ptree)) in cell {
+        // Only keep candidates ending in proper NTs
+        if bin_ntdict[nt].chars().next().unwrap() != '_' {
+            // Remove inner binarization nodes
+            candidates.push((*nt, (p, debinarize_parsetree(&bin_ntdict, ptree))))
+        }
+    }
+    // Sort
+    fn compare_results(r1: &(NT, (f64, ParseTree)), r2: &(NT, (f64, ParseTree))) -> std::cmp::Ordering {
+        let &(nt1, (p1, ref pt1)) = r1;
+        let &(nt2, (p2, ref pt2)) = r2;
+        let c = p2.partial_cmp(&p1).unwrap_or(std::cmp::Ordering::Equal);
+        match c {
+            std::cmp::Ordering::Equal => (nt1,pt1).cmp(&(nt2,pt2)),
+            _ => c
+        }
+    }
+    candidates.sort_by(compare_results);
+    candidates
+}
+
 fn eval_parses(testsents: &Vec<String>, testtrees: &Vec<PTBTree>, parses: Vec<HashMap<NT, (f64, ParseTree)>>, bin_ntdict: &HashMap<NT, String>, stats: &mut PCFGParsingStatistics) {
     // Save output for EVALB call
     let tmp_dir = TempDir::new("pcfg-rust").unwrap();
@@ -105,26 +129,7 @@ fn eval_parses(testsents: &Vec<String>, testtrees: &Vec<PTBTree>, parses: Vec<Ha
     let mut best_or_fail_file = File::create(&best_or_fail_path).unwrap();
     
     for ((sent, tree), cell) in testsents.iter().zip(testtrees).zip(parses.iter()) {
-        // Remove binarization traces
-        let mut candidates: Vec<(NT, (f64, ParseTree))> = Vec::new();
-        for (nt, &(p, ref ptree)) in cell {
-            // Only keep candidates ending in proper NTs
-            if bin_ntdict[nt].chars().next().unwrap() != '_' {
-                // Remove inner binarization nodes
-                candidates.push((*nt, (p, debinarize_parsetree(&bin_ntdict, ptree))))
-            }
-        }
-        // Sort
-        fn compare_results(r1: &(NT, (f64, ParseTree)), r2: &(NT, (f64, ParseTree))) -> std::cmp::Ordering {
-            let &(nt1, (p1, ref pt1)) = r1;
-            let &(nt2, (p2, ref pt2)) = r2;
-            let c = p2.partial_cmp(&p1).unwrap_or(std::cmp::Ordering::Equal);
-            match c {
-                std::cmp::Ordering::Equal => (nt1,pt1).cmp(&(nt2,pt2)),
-                _ => c
-            }
-        }
-        candidates.sort_by(compare_results);
+        let candidates = prepare_candidates(cell, bin_ntdict);
         
         //print_example(&bin_ntdict, &sent, &tree, &candidates);
         
@@ -143,7 +148,6 @@ fn eval_parses(testsents: &Vec<String>, testtrees: &Vec<PTBTree>, parses: Vec<Ha
         writeln!(best_or_fail_file, "{}", best_or_fail_parse).unwrap();
     }
     
-    /*
     for line in String::from_utf8(Command::new("../EVALB/evalb").arg(&gold_path).arg(best_path).output().unwrap().stdout).unwrap().lines() {
         if line.starts_with("Bracketing FMeasure") {
             stats.fmeasure = line.split('=').nth(1).unwrap().trim().parse().unwrap();
@@ -156,7 +160,6 @@ fn eval_parses(testsents: &Vec<String>, testtrees: &Vec<PTBTree>, parses: Vec<Ha
             break
         }
     }
-    */
     
     stats.print(false);
     
@@ -209,9 +212,44 @@ fn main() {
     
     //println!("Now parsing!");
     let mut s1 = stats.clone();
-    let parses = parse::cky_parse(&bin_rules, &testsents, &mut s1);
-    eval_parses(&testsents, &testtrees, parses, &bin_ntdict, &mut s1);
+    let parses1 = parse::cky_parse(&bin_rules, &testsents, &mut s1);
+    eval_parses(&testsents, &testtrees, parses1.clone(), &bin_ntdict, &mut s1);
     let mut s2 = stats.clone();
-    let parses = parse::agenda_cky_parse(&bin_rules, &testsents, &mut s2);
-    eval_parses(&testsents, &testtrees, parses, &bin_ntdict, &mut s2);
+    let parses2 = parse::agenda_cky_parse(&bin_rules, &testsents, &mut s2);
+    eval_parses(&testsents, &testtrees, parses2.clone(), &bin_ntdict, &mut s2);
+    
+    // Do they differ?
+    for (s, (p1, p2)) in testsents.iter().zip(parses1.iter().zip(parses2)) {
+        let p1 = prepare_candidates(&p1, &bin_ntdict);
+        let p2 = prepare_candidates(&p2, &bin_ntdict);
+        if p1 == p2 {continue;}
+        
+        println!("Diffs of {:?}", s);
+        let mut i1 = 0;
+        let mut i2 = 0;
+        while i1 < p1.len() && i2 < p2.len() {
+            
+            if p1[i1] != p2[i2] {
+                let (nt1, (p1, ref pt1)) = p1[i1];
+                let (nt2, (p2, ref pt2)) = p2[i2];
+                println!("     {}/{}/{}\n  != {}/{}/{}", nt1, p1, pt1.render(), nt2, p2, pt2.render())
+            } else {
+                let (nt1, (p1, ref pt1)) = p1[i1];
+                println!("  ok: {}/{}/{}", nt1, p1, pt1.render());
+            }
+            
+            i1 += 1;
+            i2 += 1;
+        }
+        while i1 < p1.len() {
+            let (nt1, (p1, ref pt1)) = p1[i1];
+            println!("  1extra: {}/{}/{}", nt1, p1, pt1.render());
+            i1 += 1;
+        }
+        while i2 < p2.len() {
+            let (nt2, (p2, ref pt2)) = p2[i2];
+            println!("  2extra: {}/{}/{}", nt2, p2, pt2.render());
+            i2 += 1;
+        }
+    }
 }
