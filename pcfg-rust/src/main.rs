@@ -115,7 +115,16 @@ fn eval_parses(testsents: &Vec<String>, testtrees: &Vec<PTBTree>, parses: Vec<Ha
             }
         }
         // Sort
-        candidates.sort_by(|&(_, (p1, _)), &(_, (p2, _))| p2.partial_cmp(&p1).unwrap_or(std::cmp::Ordering::Equal));
+        fn compare_results(r1: &(NT, (f64, ParseTree)), r2: &(NT, (f64, ParseTree))) -> std::cmp::Ordering {
+            let &(nt1, (p1, ref pt1)) = r1;
+            let &(nt2, (p2, ref pt2)) = r2;
+            let c = p2.partial_cmp(&p1).unwrap_or(std::cmp::Ordering::Equal);
+            match c {
+                std::cmp::Ordering::Equal => (nt1,pt1).cmp(&(nt2,pt2)),
+                _ => c
+            }
+        }
+        candidates.sort_by(compare_results);
         
         //print_example(&bin_ntdict, &sent, &tree, &candidates);
         

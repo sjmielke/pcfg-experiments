@@ -43,7 +43,7 @@ fn preprocess_rules(bin_rules: &HashMap<NT, HashMap<RHS, f64>>) -> (ToNTVec<Stri
 pub fn cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, sents: &'a [String], stats: &mut PCFGParsingStatistics) -> Vec<HashMap<NT, (f64, ParseTree<'a>)>> {
     // Build helper dicts for quick access. All are bottom-up in the parse.
     let t = get_usertime();
-    let (word_to_preterminal, preterminals, nt_chains, rhss_to_lhs, _, _) = preprocess_rules(bin_rules);
+    let (word_to_preterminal, all_preterminals, nt_chains, rhss_to_lhs, _, _) = preprocess_rules(bin_rules);
     stats.cky_prep = get_usertime() - t;
     
     stats.cky_terms = 0.0;
@@ -62,26 +62,68 @@ pub fn cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, sents: &'a [
         // Now populate a chart (0-based indexing)!
         let mut ckychart: HashMap<(NT, NT), HashMap<NT, (f64, ParseTree)>> = HashMap::new();
         
+        #[allow(dead_code)]
+        fn print_chart(ckychart: &HashMap<(NT, NT), HashMap<NT, (f64, ParseTree)>>, sent: &Vec<&str>) {
+            for width in 1 .. sent.len() + 1 {
+                println!("Width {:2}: ", width);
+                for start in 0 .. sent.len() - (width-1) {
+                    let end = start + width;
+                    print!("    {:?}   ->  ", &sent[start..end]);
+                    for (nt, _) in ckychart.get(&(start, end - 1)).clone().unwrap_or(&HashMap::new()) {
+                        print!("{}, ", nt);
+                    }
+                    println!("");
+                }
+                println!("");
+            }
+        }
+        
         // Populate leafs
         let t = get_usertime();
         for (i,w) in sent.iter().enumerate() {
             // TODO actually could just break if we don't recognize terminals :D
-            let terminals: HashMap<NT, (f64, ParseTree)> = match word_to_preterminal.get(*w) {
+            let mut preterminals: HashMap<NT, (f64, ParseTree)> = match word_to_preterminal.get(*w) {
                 Some(prets) => prets.iter().map(|&(nt, logprob)| (nt, (logprob, ParseTree::InnerNode { label: nt, children: vec![ParseTree::TerminalNode { label: w }] }))).collect(),
                 None => {
                     stats.oov_words += 1;
                     oov_in_this_sent = true;
                     match stats.oov_handling {
                         OOVHandling::Zero => HashMap::new(),
-                        OOVHandling::Uniform => preterminals.clone().into_iter().map(|pt| (pt, (-300.0, ParseTree::InnerNode { label: pt, children: vec![ParseTree::TerminalNode { label: w }] }))).collect(),
+                        OOVHandling::Uniform => all_preterminals.clone().into_iter().map(|pt| (pt, (-300.0, ParseTree::InnerNode { label: pt, children: vec![ParseTree::TerminalNode { label: w }] }))).collect(),
                         OOVHandling::Marginal => panic!("Unimplemented")
                     }
                 }
             };
-            ckychart.insert((i, i), terminals);
+            // Apply unary rules!
+            let mut got_new = true;
+            while got_new {
+                got_new = false;
+                let celllist = preterminals.clone();
+                let celllist: Vec<_> = celllist.iter().collect();
+                for (reached_nt, &(lower_prob, ref lower_ptree)) in celllist {
+                    if let Some(v) = nt_chains.get(reached_nt) {
+                        for &(lhs, cr_prob) in v {
+                            let new_prob = cr_prob + lower_prob;
+                            let tree = ParseTree::InnerNode {label: lhs, children: vec![lower_ptree.clone()]};
+                            match preterminals.get(&lhs) {
+                                None => {
+                                    preterminals.insert(lhs, (new_prob, tree));
+                                }
+                                Some(&(old_prob, _)) => if old_prob < new_prob {
+                                    preterminals.insert(lhs, (new_prob, tree));
+                                }
+                            };
+                        }
+                    }
+                }
+            }
+            
+            ckychart.insert((i, i), preterminals);
             //println!("{}, {:?}", i, ckychart[&(i,i)]);
         }
         stats.cky_terms += get_usertime() - t;
+        
+        //print_chart(&ckychart, &sent);
         
         // Populate inner cells
         let t = get_usertime();
@@ -139,6 +181,8 @@ pub fn cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, sents: &'a [
                 
                 assert!(ckychart.insert((start, end - 1), cell).is_none())
             }
+            
+            //print_chart(&ckychart, &sent);
         }
         stats.cky_higher += get_usertime() - t;
         
@@ -245,7 +289,7 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, sents
     // Build helper dicts for quick access. All are bottom-up in the parse.
     let t = get_usertime();
     let ntcount = bin_rules.len();
-    let (word_to_preterminal, preterminals, nt_chains, _, rhs_l_to_lhs, rhs_r_to_lhs) = preprocess_rules(bin_rules);
+    let (word_to_preterminal, all_preterminals, nt_chains, _, rhs_l_to_lhs, rhs_r_to_lhs) = preprocess_rules(bin_rules);
     stats.cky_prep = get_usertime() - t;
     
     stats.cky_terms = 0.0;
@@ -359,6 +403,7 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, sents
             let item = ckychart[chart_adr(sentlen, ntcount, 0, sent.len(), nt)];
             if item.0 > ::std::f64::NEG_INFINITY {
                 let tree = recover_parsetree(&ckychart, sentlen, ntcount, 0, sent.len(), nt, &sent);
+                //println!("Tree:\n{}", tree.render());
                 r.insert(nt, (item.0, tree));
             }
         }

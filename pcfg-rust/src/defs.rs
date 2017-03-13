@@ -16,7 +16,7 @@ pub struct Rule {
     pub rhs: RHS
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ParseTree<'a> {
     InnerNode {
         label: NT,
@@ -24,6 +24,17 @@ pub enum ParseTree<'a> {
     },
     TerminalNode {
         label: &'a str
+    }
+}
+impl<'a> ParseTree<'a> {
+    #[allow(dead_code)]
+    pub fn render(&self) -> String {
+        match *self {
+            ParseTree::TerminalNode {label} => label.to_string(),
+            ParseTree::InnerNode {label, ref children} => {
+                label.to_string() + "(" + &children.iter().map(|c| c.render()).collect::<Vec<_>>().join(",") + ")"
+            }
+        }
     }
 }
 
