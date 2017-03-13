@@ -105,15 +105,13 @@ pub fn cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, sents: &'a [
                         for &(lhs, cr_prob) in v {
                             let new_prob = cr_prob + lower_prob;
                             let tree = ParseTree::InnerNode {label: lhs, children: vec![lower_ptree.clone()]};
-                            match preterminals.get(&lhs).cloned() { // <- TODO remove after checking
+                            match preterminals.get(&lhs) {
                                 None => {
                                     preterminals.insert(lhs, (new_prob, tree));
                                     got_new = true;
                                 }
-                                Some((old_prob, ref pt)) => {
-                                    let replace = (old_prob, pt.clone()) < (new_prob, tree.clone());
-                                    
-                                    if replace {
+                                Some(&(old_prob, _)) => {
+                                    if old_prob < new_prob {
                                         preterminals.insert(lhs, (new_prob, tree));
                                         got_new = true;
                                     }
@@ -145,14 +143,12 @@ pub fn cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, sents: &'a [
                                 for &(lhs, prob) in m {
                                     let new_prob = pr1 + pr2 + prob;
                                     let tree = ParseTree::InnerNode {label: lhs, children: vec![pt1.clone(), pt2.clone()] };
-                                    match cell.get(&lhs).cloned() { // <- TODO remove after checking
+                                    match cell.get(&lhs) {
                                         None => {
                                             cell.insert(lhs, (new_prob, tree));
                                         }
-                                        Some((old_prob, ref pt)) => {
-                                            let replace = (old_prob, pt.clone()) < (new_prob, tree.clone());
-                                            
-                                            if replace {
+                                        Some(&(old_prob, _)) => {
+                                            if old_prob < new_prob {
                                                 cell.insert(lhs, (new_prob, tree));
                                             }
                                         }
@@ -174,15 +170,13 @@ pub fn cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, sents: &'a [
                             for &(lhs, cr_prob) in v {
                                 let new_prob = cr_prob + lower_prob;
                                 let tree = ParseTree::InnerNode {label: lhs, children: vec![lower_ptree.clone()]};
-                                match cell.get(&lhs).cloned() { // TODO <- remove after checking
+                                match cell.get(&lhs) {
                                     None => {
                                         cell.insert(lhs, (new_prob, tree));
                                         got_new = true;
                                     }
-                                    Some((old_prob, ref pt)) => {
-                                        let replace = (old_prob, pt.clone()) < (new_prob, tree.clone());
-                                        
-                                        if replace {
+                                    Some(&(old_prob, _)) => {
+                                        if old_prob < new_prob {
                                             cell.insert(lhs, (new_prob, tree));
                                             got_new = true;
                                         }
@@ -360,16 +354,7 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, sents
                     let high_addr = chart_adr(sentlen, ntcount, i, j, lhs);
                     let newscore = base_score + logprob;
                     
-                    let (oldscore, _, _) = ckychart[high_addr];
-                    let mut replace = oldscore < newscore;
-                    if !replace {
-                        let oldtree   = recover_parsetree(&ckychart, sentlen, ntcount, i, j, lhs,     &sent);
-                        let newtree_l = recover_parsetree(&ckychart, sentlen, ntcount, i, j, base_nt, &sent);
-                        let newtree = ParseTree::InnerNode { label: lhs, children: vec![newtree_l] };
-                        replace = (oldscore, oldtree) < (newscore, newtree);
-                    }
-                    
-                    if replace {
+                    if ckychart[high_addr].0 < newscore {
                         ckychart[high_addr] = (newscore, base_addr, ::std::usize::MAX);
                         agenda.push(AgendaItem(newscore, i, j, lhs))
                     }
@@ -387,17 +372,7 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, sents
                             let high_addr = chart_adr(sentlen, ntcount, i, k, lhs);
                             let newscore = base_score + rhs_r_score + logprob;
                             
-                            let (oldscore, _, _) = ckychart[high_addr];
-                            let mut replace = oldscore < newscore;
-                            if !replace {
-                                let oldtree   = recover_parsetree(&ckychart, sentlen, ntcount, i, k, lhs,     &sent);
-                                let newtree_l = recover_parsetree(&ckychart, sentlen, ntcount, i, j, base_nt, &sent);
-                                let newtree_r = recover_parsetree(&ckychart, sentlen, ntcount, j, k, rhs_r,   &sent);
-                                let newtree = ParseTree::InnerNode { label: lhs, children: vec![newtree_l, newtree_r] };
-                                replace = (oldscore, oldtree) < (newscore, newtree);
-                            }
-                            
-                            if replace {
+                            if ckychart[high_addr].0 < newscore {
                                 ckychart[high_addr] = (newscore, base_addr, rhs_r_addr);
                                 agenda.push(AgendaItem(newscore, i, k, lhs))
                             }
@@ -418,17 +393,7 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, sents
                                 let high_addr = chart_adr(sentlen, ntcount, h, j, lhs);
                                 let newscore = base_score + rhs_l_score + logprob;
                                 
-                                let (oldscore, _, _) = ckychart[high_addr];
-                                let mut replace = oldscore < newscore;
-                                if !replace {
-                                    let oldtree   = recover_parsetree(&ckychart, sentlen, ntcount, h, j, lhs,     &sent);
-                                    let newtree_l = recover_parsetree(&ckychart, sentlen, ntcount, h, i, rhs_l,   &sent);
-                                    let newtree_r = recover_parsetree(&ckychart, sentlen, ntcount, i, j, base_nt, &sent);
-                                    let newtree = ParseTree::InnerNode { label: lhs, children: vec![newtree_l, newtree_r] };
-                                    replace = (oldscore, oldtree) < (newscore, newtree);
-                                }
-                                
-                                if replace {
+                                if ckychart[high_addr].0 < newscore {
                                     ckychart[high_addr] = (newscore, rhs_l_addr, base_addr);
                                     agenda.push(AgendaItem(newscore, h, j, lhs))
                                 }

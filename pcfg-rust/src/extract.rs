@@ -162,12 +162,12 @@ pub fn ptb_test(wsj_path: &str, stats: &PCFGParsingStatistics) -> (Vec<String>, 
     let mut devtrees: Vec<PTBTree> = Vec::new();
     for mut t in read_devtrees {
         t.strip_all_predicate_annotations();
-        if t.front_length() <= stats.testmaxlen && devtrees.len() < stats.testsize {// && t.front() == "Markets --" {
+        if t.front_length() <= stats.testmaxlen && devtrees.len() < stats.testsize {
             devsents.push(t.front());
             devtrees.push(t);
         }
     }
-    //assert_eq!(devtrees.len(), stats.testsize);
+    assert_eq!(devtrees.len(), stats.testsize);
     //println!("From {} candidates we took {} dev sentences (max length {})!", read_devtrees.len(), devtrees.len(), stats.testmaxlen);
     
     (devsents, devtrees)

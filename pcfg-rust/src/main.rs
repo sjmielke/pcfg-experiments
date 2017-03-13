@@ -217,39 +217,4 @@ fn main() {
     let mut s2 = stats.clone();
     let parses2 = parse::agenda_cky_parse(&bin_rules, &testsents, &mut s2);
     eval_parses(&testsents, &testtrees, parses2.clone(), &bin_ntdict, &mut s2);
-    
-    // Do they differ?
-    for (s, (p1, p2)) in testsents.iter().zip(parses1.iter().zip(parses2)) {
-        let p1 = prepare_candidates(&p1, &bin_ntdict);
-        let p2 = prepare_candidates(&p2, &bin_ntdict);
-        if p1 == p2 {continue;}
-        
-        println!("Diffs of {:?}", s);
-        let mut i1 = 0;
-        let mut i2 = 0;
-        while i1 < p1.len() && i2 < p2.len() {
-            
-            if p1[i1] != p2[i2] {
-                let (nt1, (p1, ref pt1)) = p1[i1];
-                let (nt2, (p2, ref pt2)) = p2[i2];
-                println!("     {}/{}/{}\n  != {}/{}/{}", nt1, p1, pt1.render(), nt2, p2, pt2.render())
-            } else {
-                let (nt1, (p1, ref pt1)) = p1[i1];
-                println!("  ok: {}/{}/{}", nt1, p1, pt1.render());
-            }
-            
-            i1 += 1;
-            i2 += 1;
-        }
-        while i1 < p1.len() {
-            let (nt1, (p1, ref pt1)) = p1[i1];
-            println!("  1extra: {}/{}/{}", nt1, p1, pt1.render());
-            i1 += 1;
-        }
-        while i2 < p2.len() {
-            let (nt2, (p2, ref pt2)) = p2[i2];
-            println!("  2extra: {}/{}/{}", nt2, p2, pt2.render());
-            i2 += 1;
-        }
-    }
 }
