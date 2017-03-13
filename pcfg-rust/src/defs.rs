@@ -29,6 +29,7 @@ pub enum ParseTree<'a> {
 
 // ###################################### OOV handling flag #######################################
 
+#[derive(Clone)]
 pub enum OOVHandling {
     /// Fail on every OOV (standard, fastest)
     Zero,
@@ -61,6 +62,7 @@ impl ::std::str::FromStr for OOVHandling {
 
 // #################################### All flags / statistics ####################################
 
+#[derive(Clone)]
 pub struct PCFGParsingStatistics {
     // Raw numbers
     pub trainsize: usize,
@@ -90,10 +92,10 @@ impl PCFGParsingStatistics {
         print!("{}\t", self.testsize);
         print!("{}\t", self.testmaxlen);
         print!("{}\t", self.oov_handling);
-        print!("{}\t", self.gram_ext_bin);
-        print!("{}\t", self.cky_prep);
-        print!("{}\t", self.cky_terms);
-        print!("{}\t", self.cky_higher);
+        print!("{:.3}\t", self.gram_ext_bin);
+        print!("{:.3}\t", self.cky_prep);
+        print!("{:.3}\t", self.cky_terms);
+        print!("{:.3}\t", self.cky_higher);
         print!("{}\t", self.oov_words);
         print!("{}\t", self.oov_sents);
         print!("{}\t", self.parsefails);

@@ -94,6 +94,69 @@ fn print_example(bin_ntdict: &HashMap<NT, String>, sent: &str, tree: &PTBTree, s
     }
 }
 
+fn eval_parses(testsents: &Vec<String>, testtrees: &Vec<PTBTree>, parses: Vec<HashMap<NT, (f64, ParseTree)>>, bin_ntdict: &HashMap<NT, String>, stats: &mut PCFGParsingStatistics) {
+    // Save output for EVALB call
+    let tmp_dir = TempDir::new("pcfg-rust").unwrap();
+    let gold_path = tmp_dir.path().join("gold.txt");
+    let best_path = tmp_dir.path().join("best.txt");
+    let best_or_fail_path = tmp_dir.path().join("best_or_fail.txt");
+    let mut gold_file = File::create(&gold_path).unwrap();
+    let mut best_file = File::create(&best_path).unwrap();
+    let mut best_or_fail_file = File::create(&best_or_fail_path).unwrap();
+    
+    for ((sent, tree), cell) in testsents.iter().zip(testtrees).zip(parses.iter()) {
+        // Remove binarization traces
+        let mut candidates: Vec<(NT, (f64, ParseTree))> = Vec::new();
+        for (nt, &(p, ref ptree)) in cell {
+            // Only keep candidates ending in proper NTs
+            if bin_ntdict[nt].chars().next().unwrap() != '_' {
+                // Remove inner binarization nodes
+                candidates.push((*nt, (p, debinarize_parsetree(&bin_ntdict, ptree))))
+            }
+        }
+        // Sort
+        candidates.sort_by(|&(_, (p1, _)), &(_, (p2, _))| p2.partial_cmp(&p1).unwrap_or(std::cmp::Ordering::Equal));
+        
+        //print_example(&bin_ntdict, &sent, &tree, &candidates);
+        
+        let gold_parse: String = format!("{}", tree);
+        let best_parse: String = match candidates.get(0) {
+            None => "(( ".to_string() + &sent.replace(" ", ") ( ") + "))",
+            Some(&(_, (_, ref parsetree))) => format!("{}", parsetree2ptbtree(&bin_ntdict, &parsetree))
+        };
+        let best_or_fail_parse: String = match candidates.get(0) {
+            None => "".to_string(),
+            Some(&(_, (_, ref parsetree))) => format!("{}", parsetree2ptbtree(&bin_ntdict, &parsetree))
+        };
+        
+        writeln!(gold_file, "{}", gold_parse).unwrap();
+        writeln!(best_file, "{}", best_parse).unwrap();
+        writeln!(best_or_fail_file, "{}", best_or_fail_parse).unwrap();
+    }
+    
+    /*
+    for line in String::from_utf8(Command::new("../EVALB/evalb").arg(&gold_path).arg(best_path).output().unwrap().stdout).unwrap().lines() {
+        if line.starts_with("Bracketing FMeasure") {
+            stats.fmeasure = line.split('=').nth(1).unwrap().trim().parse().unwrap();
+            break
+        }
+    }
+    for line in String::from_utf8(Command::new("../EVALB/evalb").arg(&gold_path).arg(best_or_fail_path).output().unwrap().stdout).unwrap().lines() {
+        if line.starts_with("Bracketing FMeasure") {
+            stats.or_fail_fmeasure = line.split('=').nth(1).unwrap().trim().parse().unwrap();
+            break
+        }
+    }
+    */
+    
+    stats.print(false);
+    
+    // safely close to get error messages just in case
+    drop(gold_file);
+    drop(best_file);
+    tmp_dir.close().unwrap();
+}
+
 fn main() {
     let mut stats: PCFGParsingStatistics = PCFGParsingStatistics{
         // Placeholders
@@ -136,64 +199,10 @@ fn main() {
     stats.gram_ext_bin = get_usertime() - t;
     
     //println!("Now parsing!");
-    let parses = parse::cky_parse(&bin_rules, &testsents, &mut stats);
-    
-    // Save output for EVALB call
-    let tmp_dir = TempDir::new("pcfg-rust").unwrap();
-    let gold_path = tmp_dir.path().join("gold.txt");
-    let best_path = tmp_dir.path().join("best.txt");
-    let best_or_fail_path = tmp_dir.path().join("best_or_fail.txt");
-    let mut gold_file = File::create(&gold_path).unwrap();
-    let mut best_file = File::create(&best_path).unwrap();
-    let mut best_or_fail_file = File::create(&best_or_fail_path).unwrap();
-    
-    for ((sent, tree), cell) in testsents.iter().zip(testtrees).zip(parses.iter()) {
-        // Remove binarization traces
-        let mut candidates: Vec<(NT, (f64, ParseTree))> = Vec::new();
-        for (nt, &(p, ref ptree)) in cell {
-            // Only keep candidates ending in proper NTs
-            if bin_ntdict[nt].chars().next().unwrap() != '_' {
-                // Remove inner binarization nodes
-                candidates.push((*nt, (p, debinarize_parsetree(&bin_ntdict, ptree))))
-            }
-        }
-        // Sort
-        candidates.sort_by(|&(_, (p1, _)), &(_, (p2, _))| p2.partial_cmp(&p1).unwrap_or(std::cmp::Ordering::Equal));
-        
-        //print_example(&bin_ntdict, &sent, &tree, &candidates);
-        
-        let gold_parse: String = format!("{}", tree);
-        let best_parse: String = match candidates.get(0) {
-            None => "(( ".to_string() + &sent.replace(" ", ") ( ") + "))",
-            Some(&(_, (_, ref parsetree))) => format!("{}", parsetree2ptbtree(&bin_ntdict, &parsetree))
-        };
-        let best_or_fail_parse: String = match candidates.get(0) {
-            None => "".to_string(),
-            Some(&(_, (_, ref parsetree))) => format!("{}", parsetree2ptbtree(&bin_ntdict, &parsetree))
-        };
-        
-        writeln!(gold_file, "{}", gold_parse).unwrap();
-        writeln!(best_file, "{}", best_parse).unwrap();
-        writeln!(best_or_fail_file, "{}", best_or_fail_parse).unwrap();
-    }
-    
-    for line in String::from_utf8(Command::new("../EVALB/evalb").arg(&gold_path).arg(best_path).output().unwrap().stdout).unwrap().lines() {
-        if line.starts_with("Bracketing FMeasure") {
-            stats.fmeasure = line.split('=').nth(1).unwrap().trim().parse().unwrap();
-            break
-        }
-    }
-    for line in String::from_utf8(Command::new("../EVALB/evalb").arg(&gold_path).arg(best_or_fail_path).output().unwrap().stdout).unwrap().lines() {
-        if line.starts_with("Bracketing FMeasure") {
-            stats.or_fail_fmeasure = line.split('=').nth(1).unwrap().trim().parse().unwrap();
-            break
-        }
-    }
-    
-    stats.print(false);
-    
-    // safely close to get error messages just in case
-    drop(gold_file);
-    drop(best_file);
-    tmp_dir.close().unwrap();
+    let mut s1 = stats.clone();
+    let parses = parse::cky_parse(&bin_rules, &testsents, &mut s1);
+    eval_parses(&testsents, &testtrees, parses, &bin_ntdict, &mut s1);
+    let mut s2 = stats.clone();
+    let parses = parse::agenda_cky_parse(&bin_rules, &testsents, &mut s2);
+    eval_parses(&testsents, &testtrees, parses, &bin_ntdict, &mut s2);
 }

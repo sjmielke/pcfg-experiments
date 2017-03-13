@@ -134,7 +134,7 @@ pub fn ptb_train(wsj_path: &str, stats: &mut PCFGParsingStatistics) -> (HashMap<
     }
     
     for ref mut t in &mut train_trees[0..stats.trainsize] {
-        t.strip_predicate_annotations();
+        t.strip_all_predicate_annotations();
         readoff_rules_into(t, &mut lhs_to_rhs_count, &mut rev_ntdict);
     }
     
@@ -161,7 +161,7 @@ pub fn ptb_test(wsj_path: &str, stats: &PCFGParsingStatistics) -> (Vec<String>, 
     let mut devsents: Vec<String> = Vec::new();
     let mut devtrees: Vec<PTBTree> = Vec::new();
     for mut t in read_devtrees {
-        t.strip_predicate_annotations();
+        t.strip_all_predicate_annotations();
         if t.front_length() <= stats.testmaxlen && devtrees.len() < stats.testsize {
             devsents.push(t.front());
             devtrees.push(t);
