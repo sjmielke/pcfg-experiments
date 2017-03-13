@@ -2,23 +2,21 @@ use std::collections::{HashMap, HashSet};
 
 use defs::*;
 
-pub fn cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, sents: &'a [String], stats: &mut PCFGParsingStatistics) -> Vec<HashMap<NT, (f64, ParseTree<'a>)>> {
-    // Build helper dicts for quick access. All are bottom-up in the parse.
-    let t = get_usertime();
-    let mut word_to_preterminal: HashMap<String, Vec<(NT, (f64, ParseTree))>> = HashMap::new();
-    let mut nt_chains: HashMap<NT, Vec<(NT, f64)>> = HashMap::new();
-    let mut rhss_to_lhs: HashMap<(NT, NT), Vec<(NT, f64)>> = HashMap::new();
-    let mut preterminals: HashSet<NT> = HashSet::new();
+type ToNT<T> = HashMap<T, Vec<(NT, f64)>>;
+
+fn preprocess_rules(bin_rules: &HashMap<NT, HashMap<RHS, f64>>) -> (ToNT<String>, Vec<NT>, ToNT<NT>, ToNT<(NT, NT)>) {
+    let mut word_to_preterminal: ToNT<String> = HashMap::new();
+    let mut preterminals_set: HashSet<NT> = HashSet::new();
+    let mut nt_chains: ToNT<NT> = HashMap::new();
+    let mut rhss_to_lhs: ToNT<(NT, NT)> = HashMap::new();
     
     for (lhs, rhsdict) in bin_rules {
         for (rhs, prob) in rhsdict {
             let logprob = prob.ln();
             match *rhs {
                 RHS::Terminal(ref s) => {
-                    let tree = ParseTree::TerminalNode { label: s };
-                    let tree = ParseTree::InnerNode { label: *lhs, children: vec![tree] };
-                    word_to_preterminal.entry(s.clone()).or_insert_with(Vec::new).push((*lhs, (logprob, tree.clone())));
-                    preterminals.insert(*lhs);
+                    word_to_preterminal.entry(s.to_string()).or_insert_with(Vec::new).push((*lhs, logprob));
+                    preterminals_set.insert(*lhs);
                 }
                 RHS::Unary(r) => {
                     nt_chains.entry(r).or_insert_with(Vec::new).push((*lhs, logprob))
@@ -30,7 +28,15 @@ pub fn cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, sents: &'a [
             }
         }
     }
-    let preterminals: Vec<NT> = preterminals.into_iter().collect();
+    let preterminals: Vec<NT> = preterminals_set.into_iter().collect();
+    
+    (word_to_preterminal, preterminals, nt_chains, rhss_to_lhs)
+}
+
+pub fn cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, sents: &'a [String], stats: &mut PCFGParsingStatistics) -> Vec<HashMap<NT, (f64, ParseTree<'a>)>> {
+    // Build helper dicts for quick access. All are bottom-up in the parse.
+    let t = get_usertime();
+    let (word_to_preterminal, preterminals, nt_chains, rhss_to_lhs) = preprocess_rules(bin_rules);
     stats.cky_prep = get_usertime() - t;
     
     stats.cky_terms = 0.0;
@@ -54,7 +60,7 @@ pub fn cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, sents: &'a [
         for (i,w) in sent.iter().enumerate() {
             // TODO actually could just break if we don't recognize terminals :D
             let terminals: HashMap<NT, (f64, ParseTree)> = match word_to_preterminal.get(*w) {
-                Some(prets) => prets.iter().cloned().collect(),
+                Some(prets) => prets.iter().map(|&(nt, logprob)| (nt, (logprob, ParseTree::InnerNode { label: nt, children: vec![ParseTree::TerminalNode { label: w }] }))).collect(),
                 None => {
                     stats.oov_words += 1;
                     oov_in_this_sent = true;
@@ -141,4 +147,9 @@ pub fn cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, sents: &'a [
     }
     
     results
+}
+
+pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, sents: &'a [String], stats: &mut PCFGParsingStatistics) -> Vec<HashMap<NT, (f64, ParseTree<'a>)>> {
+    stats.print(false);
+    panic!("{:?} {:?}", bin_rules, sents)
 }
