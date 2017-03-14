@@ -329,6 +329,7 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, sents
         
         // Kick it off with the terminals!
         let t = get_usertime();
+        let uniform_oov_prob = -10.0;
         for (i, w) in sent.iter().enumerate() {
             match word_to_preterminal.get(*w) {
                 Some(prets) => {
@@ -341,8 +342,8 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, sents
                         for nt in &all_preterminals {
                             let addr = chart_adr(sentlen, ntcount, i, i + 1, *nt);
                             if ckychart[addr].0 == ::std::f64::NEG_INFINITY {
-                                ckychart[addr].0 = -300.0;
-                                agenda.push(AgendaItem(-300.0, i, i+1, *nt))
+                                ckychart[addr].0 = uniform_oov_prob;
+                                agenda.push(AgendaItem(uniform_oov_prob, i, i+1, *nt))
                             }
                         }
                     }
@@ -355,8 +356,8 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, sents
                         OOVHandling::Uniform => {
                             for nt in &all_preterminals {
                                 let addr = chart_adr(sentlen, ntcount, i, i + 1, *nt);
-                                ckychart[addr].0 = -300.0;
-                                agenda.push(AgendaItem(-300.0, i, i+1, *nt))
+                                ckychart[addr].0 = uniform_oov_prob;
+                                agenda.push(AgendaItem(uniform_oov_prob, i, i+1, *nt))
                             }
                         },
                         OOVHandling::Marginal => panic!("Unimplemented")
