@@ -8,7 +8,7 @@ use std::io::Write;
 use tempdir::TempDir;
 
 extern crate argparse;
-use argparse::{ArgumentParser, Store};
+use argparse::{ArgumentParser, Store, StoreTrue};
 
 extern crate ptb_reader;
 use ptb_reader::PTBTree;
@@ -177,7 +177,9 @@ fn main() {
         trainsize: 7500,
         testsize: 500,
         testmaxlen: 40,
-        oov_handling: OOVHandling::Zero
+        oov_handling: OOVHandling::Zero,
+        all_terms_fallback: false,
+        exhaustive: false
     };
     
     let mut wsj_path: String = "/home/sjm/documents/Uni/FuzzySP/treebank-3_LDC99T42/treebank_3/parsed/mrg/wsj".to_string();
@@ -197,6 +199,12 @@ fn main() {
         ap.refer(&mut stats.oov_handling)
             .add_option(&["--oovhandling"], Store,
             "OOV->POS handling: Zero (default), Uniform or Marginal");
+        ap.refer(&mut stats.all_terms_fallback)
+            .add_option(&["--all-terms-fallback"], StoreTrue,
+            "Allows OOV-like treatment to all terms as fallback");
+        ap.refer(&mut stats.exhaustive)
+            .add_option(&["--exhaustive"], StoreTrue,
+            "Forces exhaustive search for all parses");
         ap.refer(&mut wsj_path)
             .add_option(&["--wsjpath"], Store,
             "Path of WSL merged data (.../treebank_3/parsed/mrg/wsj)");
@@ -212,7 +220,7 @@ fn main() {
     stats.unbin_nts = unb_ntdict.len();
     stats.bin_nts   = bin_ntdict.len();
     
-    println!("Now parsing!");
+    //println!("Now parsing!");
     //let mut s1 = stats.clone();
     //let parses1 = parse::cky_parse(&bin_rules, &testsents, &mut s1);
     //eval_parses(&testsents, &testtrees, parses1.clone(), &bin_ntdict, &mut s1);

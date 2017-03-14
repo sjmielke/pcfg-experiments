@@ -80,7 +80,8 @@ pub struct PCFGParsingStatistics {
     pub testsize: usize,
     pub testmaxlen: usize,
     pub oov_handling: OOVHandling,
-    // TODO add flag for OOV-like handling fallback of known words!
+    pub all_terms_fallback: bool,
+    pub exhaustive: bool,
     pub unbin_nts: usize,
     pub bin_nts: usize,
     // Times in seconds
@@ -99,7 +100,7 @@ pub struct PCFGParsingStatistics {
 impl PCFGParsingStatistics {
     pub fn print(&self, head: bool) {
         if head {
-            println!("trainsize\ttestsize\ttestmaxlen\tunbin_nts\tbin_nts\toov_handling\tgram_ext_bin\tcky_prep\tcky_terms\tcky_higher\toov_words\toov_sents\tparsefails\tfmeasure\tfmeasure (fail ok)");
+            println!("trainsize\ttestsize\ttestmaxlen\tunbin_nts\tbin_nts\toov_handling\tall_terms_fallback\texhaustive\tgram_ext_bin\tcky_prep\tcky_terms\tcky_higher\toov_words\toov_sents\tparsefails\tfmeasure\tfmeasure (fail ok)");
         }
         print!("{}\t", self.trainsize);
         print!("{}\t", self.testsize);
@@ -107,6 +108,8 @@ impl PCFGParsingStatistics {
         print!("{}\t", self.unbin_nts);
         print!("{}\t", self.bin_nts);
         print!("{}\t", self.oov_handling);
+        print!("{}\t", if self.all_terms_fallback {"all_terms_fallback"} else {"no_fallback"});
+        print!("{}\t", if self.exhaustive {"exhaustive"} else {"stop_on_first_goal"});
         print!("{:.3}\t", self.gram_ext_bin);
         print!("{:.3}\t", self.cky_prep);
         print!("{:.3}\t", self.cky_terms);

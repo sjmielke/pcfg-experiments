@@ -309,7 +309,7 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, sents
     let mut used_pops = 0;
     
     for raw_sent in sents {
-        println!("parsing: {}", raw_sent);
+        //println!("parsing: {}", raw_sent);
         
         let mut oov_in_this_sent = false;
         
@@ -330,15 +330,38 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, sents
         // Kick it off with the terminals!
         let t = get_usertime();
         for (i, w) in sent.iter().enumerate() {
-            if let Some(prets) = word_to_preterminal.get(*w) {
-                for &(nt, logprob) in prets {
-                    let addr = chart_adr(sentlen, ntcount, i, i + 1, nt);
-                    ckychart.get_mut(addr).expect("Invalid access in terminal section").0 = logprob;
-                    agenda.push(AgendaItem(logprob, i, i+1, nt))
+            match word_to_preterminal.get(*w) {
+                Some(prets) => {
+                    for &(nt, logprob) in prets {
+                        let addr = chart_adr(sentlen, ntcount, i, i + 1, nt);
+                        ckychart[addr].0 = logprob;
+                        agenda.push(AgendaItem(logprob, i, i+1, nt))
+                    }
+                    if stats.all_terms_fallback {
+                        for nt in &all_preterminals {
+                            let addr = chart_adr(sentlen, ntcount, i, i + 1, *nt);
+                            if ckychart[addr].0 == ::std::f64::NEG_INFINITY {
+                                ckychart[addr].0 = -300.0;
+                                agenda.push(AgendaItem(-300.0, i, i+1, *nt))
+                            }
+                        }
+                    }
                 }
-            } else {
-                oov_in_this_sent = true;
-                stats.oov_words += 1
+                None => {
+                    oov_in_this_sent = true;
+                    stats.oov_words += 1;
+                    match stats.oov_handling {
+                        OOVHandling::Zero => (),
+                        OOVHandling::Uniform => {
+                            for nt in &all_preterminals {
+                                let addr = chart_adr(sentlen, ntcount, i, i + 1, *nt);
+                                ckychart[addr].0 = -300.0;
+                                agenda.push(AgendaItem(-300.0, i, i+1, *nt))
+                            }
+                        },
+                        OOVHandling::Marginal => panic!("Unimplemented")
+                    }
+                }
             }
         }
         stats.cky_terms += get_usertime() - t;
@@ -350,7 +373,9 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, sents
             // Let's check if we have a goal item (and can stop) first:
             if i == 0 && j == sentlen && base_nt <= stats.unbin_nts {
                 done = true;
-                break
+                if !stats.exhaustive {
+                    break
+                }
             }
             
             if done {
