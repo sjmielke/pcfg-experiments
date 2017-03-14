@@ -293,11 +293,27 @@ fn recover_parsetree<'a>(ckychart: &[(f64, usize, usize)], sentlen: usize, ntcou
     ParseTree::InnerNode { label: nt, children: cs }
 }
 
+fn hashmap_to_vec<V: Default>(hm: HashMap<usize, V>) -> Vec<V> {
+    let mut mapvec: Vec<V> = Vec::new();
+    for (k, v) in hm {
+        while mapvec.len() <= k {
+            mapvec.push(V::default())
+        }
+        mapvec[k] = v
+    }
+    mapvec
+}
+
 pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, sents: &'a [String], stats: &mut PCFGParsingStatistics) -> Vec<HashMap<NT, (f64, ParseTree<'a>)>> {
     // Build helper dicts for quick access. All are bottom-up in the parse.
     let t = get_usertime();
     let ntcount = bin_rules.len();
+    // Get the fat HashMaps...
     let (word_to_preterminal, all_preterminals, nt_chains, _, rhs_l_to_lhs, rhs_r_to_lhs) = preprocess_rules(bin_rules);
+    // ...and convert some to Vecs for faster addressing
+    let nt_chains_vec: Vec<Vec<(NT, f64)>> = hashmap_to_vec(nt_chains);
+    let rhs_l_to_lhs_vec: Vec<Vec<(NT, NT, f64)>> = hashmap_to_vec(rhs_l_to_lhs);
+    let rhs_r_to_lhs_vec: Vec<Vec<(NT, NT, f64)>> = hashmap_to_vec(rhs_r_to_lhs);
     stats.cky_prep = get_usertime() - t;
     
     stats.cky_terms = 0.0;
@@ -391,7 +407,7 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, sents
             //println!("Popping ({}, {}, {})", i, j, base_nt);
             
             // base is RHS of a unary rule
-            if let Some(v) = nt_chains.get(&base_nt) {
+            if let Some(v) = nt_chains_vec.get(base_nt) {
                 for &(lhs, logprob) in v {
                     let high_addr = chart_adr(sentlen, ntcount, i, j, lhs);
                     let newscore = base_score + logprob;
@@ -404,7 +420,7 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, sents
             }
             
             // base is left RHS of a binary rule
-            if let Some(v) = rhs_l_to_lhs.get(&base_nt) {
+            if let Some(v) = rhs_l_to_lhs_vec.get(base_nt) {
                 for &(lhs, rhs_r, logprob) in v {
                     // Try finding the rhs_r at span (j, k)
                     for k in j+1..sentlen+1 {
@@ -425,7 +441,7 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, sents
             
             // base is right RHS of a binary rule
             if i > 0 { // <- need this check to prevent i-1 underflow!!!
-                if let Some(v) = rhs_r_to_lhs.get(&base_nt) {
+                if let Some(v) = rhs_r_to_lhs_vec.get(base_nt) {
                     for &(lhs, rhs_l, logprob) in v {
                         // Try finding the rhs_l at span (h, i)
                         for h in 0..i {
