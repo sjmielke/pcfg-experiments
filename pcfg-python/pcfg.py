@@ -132,8 +132,18 @@ def parse_sent(word_to_preterminal, nt_chains, rhss_to_lhs, s, return_dict):
 	# Terminal rules
 	#print("Width: \n1: ", end = '')
 	for (i,w) in enumerate(sent):
-		ws = word_to_preterminal[w]
+		ws = dict(word_to_preterminal[w].items())
 		#print(len(ws), "/ ", end = '')
+		got_new = True
+		while got_new:
+			got_new = False
+			for (reached_nt, (lower_prob, lower_ptree)) in list(ws.items()):
+				for (lhs, cr_prob) in nt_chains[reached_nt].items():
+					new_prob = cr_prob + lower_prob
+					if lhs not in ws or ws[lhs][0] < new_prob:
+						got_new = True
+						new_ptree = (lhs, [lower_ptree])
+						ws[lhs] = (new_prob, new_ptree)
 		ckychart[(i,i)] = ws
 	#print("")
 	
