@@ -305,8 +305,11 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, sents
     
     let mut results: Vec<HashMap<NT, (f64, ParseTree<'a>)>> = Vec::new();
     
+    let mut useless_pops = 0;
+    let mut used_pops = 0;
+    
     for raw_sent in sents {
-        //println!("parsing: {}", raw_sent);
+        println!("parsing: {}", raw_sent);
         
         let mut oov_in_this_sent = false;
         
@@ -342,7 +345,20 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, sents
         
         // Now do the lengthy agenda-working
         let t = get_usertime();
+        let mut done = false;
         while let Some(AgendaItem(base_score, i, j, base_nt)) = agenda.pop() {
+            // Let's check if we have a goal item (and can stop) first:
+            if i == 0 && j == sentlen && base_nt <= stats.unbin_nts {
+                done = true;
+                break
+            }
+            
+            if done {
+                useless_pops += 1
+            } else {
+                used_pops += 1
+            }
+            
             let base_addr = chart_adr(sentlen, ntcount, i, j, base_nt);
             //assert_eq!(ckychart[base_addr].0, base_score); // <- this actually does not hold, since it could have been updated in the meantime!
             
@@ -423,6 +439,8 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, sents
         }
         results.push(r)
     }
+    
+    println!("useless: {}, used: {}", useless_pops, used_pops);
     
     results
 }

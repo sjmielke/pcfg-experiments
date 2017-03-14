@@ -172,7 +172,7 @@ fn eval_parses(testsents: &Vec<String>, testtrees: &Vec<PTBTree>, parses: Vec<Ha
 fn main() {
     let mut stats: PCFGParsingStatistics = PCFGParsingStatistics{
         // Placeholders
-        gram_ext_bin:f64::NAN, cky_prep:f64::NAN, cky_terms:f64::NAN, cky_higher:f64::NAN, oov_words:0, oov_sents:0, parsefails:0, fmeasure:f64::NAN, or_fail_fmeasure:f64::NAN,
+        gram_ext_bin:f64::NAN, cky_prep:f64::NAN, cky_terms:f64::NAN, cky_higher:f64::NAN, oov_words:0, oov_sents:0, parsefails:0, fmeasure:f64::NAN, or_fail_fmeasure:f64::NAN, unbin_nts:std::usize::MAX, bin_nts:std::usize::MAX,
         // Values
         trainsize: 7500,
         testsize: 500,
@@ -209,11 +209,13 @@ fn main() {
     let (bin_rules, bin_ntdict) = extract::binarize_grammar(&unb_rules, &unb_ntdict);
     let (testsents, testtrees)  = extract::ptb_test(&wsj_path, &stats);
     stats.gram_ext_bin = get_usertime() - t;
+    stats.unbin_nts = unb_ntdict.len();
+    stats.bin_nts   = bin_ntdict.len();
     
-    //println!("Now parsing!");
-    let mut s1 = stats.clone();
-    let parses1 = parse::cky_parse(&bin_rules, &testsents, &mut s1);
-    eval_parses(&testsents, &testtrees, parses1.clone(), &bin_ntdict, &mut s1);
+    println!("Now parsing!");
+    //let mut s1 = stats.clone();
+    //let parses1 = parse::cky_parse(&bin_rules, &testsents, &mut s1);
+    //eval_parses(&testsents, &testtrees, parses1.clone(), &bin_ntdict, &mut s1);
     let mut s2 = stats.clone();
     let parses2 = parse::agenda_cky_parse(&bin_rules, &testsents, &mut s2);
     eval_parses(&testsents, &testtrees, parses2.clone(), &bin_ntdict, &mut s2);
