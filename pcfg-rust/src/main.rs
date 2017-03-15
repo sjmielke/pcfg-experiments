@@ -179,7 +179,8 @@ fn main() {
         testmaxlen: 40,
         oov_handling: OOVHandling::Zero,
         all_terms_fallback: false,
-        exhaustive: false
+        exhaustive: false,
+        uniform_oov_prob: -10.0
     };
     
     let mut wsj_path: String = "/home/sjm/documents/Uni/FuzzySP/treebank-3_LDC99T42/treebank_3/parsed/mrg/wsj".to_string();
@@ -199,6 +200,9 @@ fn main() {
         ap.refer(&mut stats.oov_handling)
             .add_option(&["--oovhandling"], Store,
             "OOV->POS handling: Zero (default), Uniform or Marginal");
+        ap.refer(&mut stats.uniform_oov_prob)
+            .add_option(&["--oovuniformlogprob"], Store,
+            "Value for uniform OOV preterminal assignment");
         ap.refer(&mut stats.all_terms_fallback)
             .add_option(&["--all-terms-fallback"], StoreTrue,
             "Allows OOV-like treatment to all terms as fallback");

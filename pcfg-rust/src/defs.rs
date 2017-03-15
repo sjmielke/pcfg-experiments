@@ -82,6 +82,8 @@ pub struct PCFGParsingStatistics {
     pub oov_handling: OOVHandling,
     pub all_terms_fallback: bool,
     pub exhaustive: bool,
+    pub uniform_oov_prob: f64,
+    // Raw numbers
     pub unbin_nts: usize,
     pub bin_nts: usize,
     // Times in seconds
@@ -108,6 +110,7 @@ impl PCFGParsingStatistics {
         print!("{}\t", self.unbin_nts);
         print!("{}\t", self.bin_nts);
         print!("{}\t", self.oov_handling);
+        print!("{}\t", self.uniform_oov_prob);
         print!("{}\t", if self.all_terms_fallback {"all_terms_fallback"} else {"no_fallback"});
         print!("{}\t", if self.exhaustive {"exhaustive"} else {"stop_on_first_goal"});
         print!("{:.3}\t", self.gram_ext_bin);

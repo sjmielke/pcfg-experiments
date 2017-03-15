@@ -347,7 +347,7 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, sents
         
         // Kick it off with the terminals!
         let t = get_usertime();
-        let uniform_oov_prob = -10.0;
+        let uniform_oov_prob = stats.uniform_oov_prob;
         for (i, w) in sent.iter().enumerate() {
             match word_to_preterminal.get(*w) {
                 Some(prets) => {
