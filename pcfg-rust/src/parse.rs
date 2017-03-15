@@ -221,10 +221,10 @@ pub fn cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, sents: &'a [
 /// Over half of the entries are unused, but... eh, who cares, it's small enough.
 #[inline]
 fn chart_adr(sentlen: usize, ntcount: usize, a: usize, b: usize, nt: NT) -> usize {
-    assert!(a < b);
-    assert!(b <= sentlen);
-    assert!(nt > 0);
-    assert!(nt <= ntcount);
+    // assert!(a < b);
+    // assert!(b <= sentlen);
+    // assert!(nt > 0);
+    // assert!(nt <= ntcount);
     (a * (sentlen+1) + b) * ntcount + (nt - 1)
 }
 /// `chart_adr` is reversible, given sentlen and ntcount, but only very slowly (modulo).
@@ -337,11 +337,13 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, sents
         let chartlength = chart_adr(sentlen, ntcount, (sentlen-1), sentlen, ntcount) + 1;
         let mut ckychart: Vec<(f64, usize, usize)> = Vec::with_capacity(chartlength);
         //println!("Need {} cells.", chartlength);
+        
         ckychart.resize(chartlength, (::std::f64::NEG_INFINITY, ::std::usize::MAX, ::std::usize::MAX));
         
         // The agenda into these addresses will contain newly constructed chart items that are
         // ready for recombination.
-        let mut agenda: BinaryHeap<AgendaItem> = BinaryHeap::new(); // TODO maybe: with_capacity(chartlength);
+        //let mut agenda: BinaryHeap<AgendaItem> = BinaryHeap::new(); // TODO maybe: with_capacity(chartlength);
+        let mut agenda: BinaryHeap<AgendaItem> = BinaryHeap::with_capacity(chartlength);
         
         // Kick it off with the terminals!
         let t = get_usertime();
@@ -426,7 +428,7 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, sents
                     for k in j+1..sentlen+1 {
                         let rhs_r_addr = chart_adr(sentlen, ntcount, j, k, rhs_r);
                         let rhs_r_score = ckychart[rhs_r_addr].0;
-                        if rhs_r_score > ::std::f64::NEG_INFINITY {
+                        if rhs_r_score != ::std::f64::NEG_INFINITY {
                             let high_addr = chart_adr(sentlen, ntcount, i, k, lhs);
                             let newscore = base_score + rhs_r_score + logprob;
                             
@@ -447,7 +449,7 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, sents
                         for h in 0..i {
                             let rhs_l_addr = chart_adr(sentlen, ntcount, h, i, rhs_l);
                             let rhs_l_score = ckychart[rhs_l_addr].0;
-                            if rhs_l_score > ::std::f64::NEG_INFINITY {
+                            if rhs_l_score != ::std::f64::NEG_INFINITY {
                                 let high_addr = chart_adr(sentlen, ntcount, h, j, lhs);
                                 let newscore = base_score + rhs_l_score + logprob;
                                 
@@ -470,7 +472,7 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, sents
         let mut r: HashMap<NT, (f64, ParseTree)> = HashMap::new();
         for nt in 1..ntcount+1 {
             let item = ckychart[chart_adr(sentlen, ntcount, 0, sent.len(), nt)];
-            if item.0 > ::std::f64::NEG_INFINITY {
+            if item.0 != ::std::f64::NEG_INFINITY {
                 let tree = recover_parsetree(&ckychart, sentlen, ntcount, 0, sent.len(), nt, &sent);
                 //println!("Tree:\n{}", tree.render());
                 r.insert(nt, (item.0, tree));

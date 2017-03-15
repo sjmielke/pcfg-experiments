@@ -11,3 +11,6 @@ libc = "*"
 
 #[dependencies.ptb-reader]
 #path = "/home/sjm/programming/ptb-reader-rust/"
+
+[profile.release]
+debug = true
