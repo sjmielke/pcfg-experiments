@@ -324,6 +324,9 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, sents
     let mut useless_pops = 0;
     let mut used_pops = 0;
     
+    let mut skips = 0;
+    let mut noskips = 0;
+    
     for raw_sent in sents {
         //println!("parsing: {}", raw_sent);
         
@@ -397,14 +400,22 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, sents
                 }
             }
             
+            let base_addr = chart_adr(sentlen, ntcount, i, j, base_nt);
+            //assert_eq!(ckychart[base_addr].0, base_score); // <- this actually does not hold, since it could have been updated in the meantime!
+            
+            // Check if the score is still the same in the chart as in the agenda...
+            if base_score < ckychart[base_addr].0 {
+                // ...if not we found (and used!) a better one already and can skip this one!
+                skips += 1;
+                continue
+            } else { noskips += 1 }
+            
+            // Counting
             if done {
                 useless_pops += 1
             } else {
                 used_pops += 1
             }
-            
-            let base_addr = chart_adr(sentlen, ntcount, i, j, base_nt);
-            //assert_eq!(ckychart[base_addr].0, base_score); // <- this actually does not hold, since it could have been updated in the meantime!
             
             //println!("Popping ({}, {}, {})", i, j, base_nt);
             
@@ -485,6 +496,7 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, sents
     }
     
     println!("useless: {}, used: {}", useless_pops, used_pops);
+    println!("skips: {}, noskips: {}", skips, noskips);
     
     results
 }
