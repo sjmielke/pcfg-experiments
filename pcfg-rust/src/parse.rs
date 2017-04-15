@@ -6,13 +6,20 @@ use defs::*;
 type ToVecOf<T,S> = HashMap<T, Vec<S>>;
 type ToNTVec<T> = HashMap<T, Vec<(NT, f64)>>;
 
-fn preprocess_rules(bin_rules: &HashMap<NT, HashMap<RHS, f64>>) -> (ToNTVec<String>, Vec<NT>, ToNTVec<NT>, ToNTVec<(NT, NT)>, ToVecOf<NT, (NT, NT, f64)>, ToVecOf<NT, (NT, NT, f64)>) {
-    let mut word_to_preterminal: ToNTVec<String> = HashMap::new();
-    let mut preterminals_set: HashSet<NT> = HashSet::new();
-    let mut nt_chains: ToNTVec<NT> = HashMap::new();
-    let mut rhss_to_lhs: ToNTVec<(NT, NT)> = HashMap::new();
-    let mut rhs_l_to_lhs: ToVecOf<NT, (NT, NT, f64)> = HashMap::new();
-    let mut rhs_r_to_lhs: ToVecOf<NT, (NT, NT, f64)> = HashMap::new();
+fn preprocess_rules(bin_rules: &HashMap<NT, HashMap<RHS, f64>>)
+        ->  ( ToNTVec<String>            // word_to_preterminal
+            , Vec<NT>                    // preterminals
+            , ToNTVec<NT>                // nt_chains
+            , ToNTVec<(NT, NT)>          // rhss_to_lhs
+            , ToVecOf<NT, (NT, NT, f64)> // rhs_l_to_lhs
+            , ToVecOf<NT, (NT, NT, f64)> // rhs_r_to_lhs
+        ) {
+    let mut word_to_preterminal: ToNTVec<String>            = HashMap::new();
+    let mut preterminals_set   : HashSet<NT>                = HashSet::new();
+    let mut nt_chains          : ToNTVec<NT>                = HashMap::new();
+    let mut rhss_to_lhs        : ToNTVec<(NT, NT)>          = HashMap::new();
+    let mut rhs_l_to_lhs       : ToVecOf<NT, (NT, NT, f64)> = HashMap::new();
+    let mut rhs_r_to_lhs       : ToVecOf<NT, (NT, NT, f64)> = HashMap::new();
     
     for (lhs, rhsdict) in bin_rules {
         for (rhs, prob) in rhsdict {
