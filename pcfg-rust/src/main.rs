@@ -178,6 +178,7 @@ fn main() {
         testsize: 500,
         testmaxlen: 40,
         oov_handling: OOVHandling::Zero,
+        feature_structures: FeatureStructures::ExactMatch,
         all_terms_fallback: false,
         exhaustive: false,
         uniform_oov_prob: -10.0
@@ -203,6 +204,9 @@ fn main() {
         ap.refer(&mut stats.uniform_oov_prob)
             .add_option(&["--oovuniformlogprob"], Store,
             "Value for uniform OOV preterminal assignment");
+        ap.refer(&mut stats.feature_structures)
+            .add_option(&["--featurestructures"], Store,
+            "Feature structures: exactmatch (default), postagsonly");
         ap.refer(&mut stats.all_terms_fallback)
             .add_option(&["--all-terms-fallback"], StoreTrue,
             "Allows OOV-like treatment to all terms as fallback");
@@ -219,7 +223,7 @@ fn main() {
     let t = get_usertime();
     let (unb_rules, unb_ntdict) = extract::ptb_train(&wsj_path, &mut stats);
     let (bin_rules, bin_ntdict) = extract::binarize_grammar(&unb_rules, &unb_ntdict);
-    let (testsents, testtrees)  = extract::ptb_test(&wsj_path, &stats);
+    let (testsents, testposs, testtrees) = extract::ptb_test(&wsj_path, &stats);
     stats.gram_ext_bin = get_usertime() - t;
     stats.unbin_nts = unb_ntdict.len();
     stats.bin_nts   = bin_ntdict.len();
@@ -229,6 +233,6 @@ fn main() {
     //let parses1 = parse::cky_parse(&bin_rules, &testsents, &mut s1);
     //eval_parses(&testsents, &testtrees, parses1.clone(), &bin_ntdict, &mut s1);
     let mut s2 = stats.clone();
-    let parses2 = parse::agenda_cky_parse(&bin_rules, &testsents, &mut s2);
+    let parses2 = parse::agenda_cky_parse(&bin_rules, &bin_ntdict, &testsents, &testposs, &mut s2);
     eval_parses(&testsents, &testtrees, parses2.clone(), &bin_ntdict, &mut s2);
 }

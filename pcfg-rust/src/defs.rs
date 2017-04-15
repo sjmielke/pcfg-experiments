@@ -71,6 +71,33 @@ impl ::std::str::FromStr for OOVHandling {
     }
 }
 
+// FeatureStructures
+
+#[derive(Clone)]
+pub enum FeatureStructures {
+    ExactMatch,
+    POSTagsOnly
+}
+impl ::std::fmt::Display for FeatureStructures {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+        match *self {
+            FeatureStructures::ExactMatch => write!(f, "exactmatch"),
+            FeatureStructures::POSTagsOnly => write!(f, "postagsonly"),
+        }
+    }
+}
+impl ::std::str::FromStr for FeatureStructures {
+    type Err = String;
+    
+    fn from_str(s: &str) -> Result<FeatureStructures, String> {
+        match s {
+            "exactmatch" => Ok(FeatureStructures::ExactMatch),
+            "postagsonly" => Ok(FeatureStructures::POSTagsOnly),
+            _ => Err(format!("Invalid FeatureStructures parameter »{}«", s))
+        }
+    }
+}
+
 // #################################### All flags / statistics ####################################
 
 #[derive(Clone)]
@@ -83,6 +110,7 @@ pub struct PCFGParsingStatistics {
     pub all_terms_fallback: bool,
     pub exhaustive: bool,
     pub uniform_oov_prob: f64,
+    pub feature_structures: FeatureStructures,
     // Raw numbers
     pub unbin_nts: usize,
     pub bin_nts: usize,
@@ -102,7 +130,7 @@ pub struct PCFGParsingStatistics {
 impl PCFGParsingStatistics {
     pub fn print(&self, head: bool) {
         if head {
-            println!("trainsize\ttestsize\ttestmaxlen\tunbin_nts\tbin_nts\toov_handling\tall_terms_fallback\texhaustive\tgram_ext_bin\tcky_prep\tcky_terms\tcky_higher\toov_words\toov_sents\tparsefails\tfmeasure\tfmeasure (fail ok)");
+            println!("trainsize\ttestsize\ttestmaxlen\tunbin_nts\tbin_nts\toov_handling\tuniform_oov_prob\tfeature_structures\tall_terms_fallback\texhaustive\tgram_ext_bin\tcky_prep\tcky_terms\tcky_higher\toov_words\toov_sents\tparsefails\tfmeasure\tfmeasure (fail ok)");
         }
         print!("{}\t", self.trainsize);
         print!("{}\t", self.testsize);
@@ -111,6 +139,7 @@ impl PCFGParsingStatistics {
         print!("{}\t", self.bin_nts);
         print!("{}\t", self.oov_handling);
         print!("{}\t", self.uniform_oov_prob);
+        print!("{}\t", self.feature_structures);
         print!("{}\t", if self.all_terms_fallback {"all_terms_fallback"} else {"no_fallback"});
         print!("{}\t", if self.exhaustive {"exhaustive"} else {"stop_on_first_goal"});
         print!("{:.3}\t", self.gram_ext_bin);

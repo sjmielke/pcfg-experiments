@@ -46,6 +46,21 @@ fn preprocess_rules(bin_rules: &HashMap<NT, HashMap<RHS, f64>>)
     (word_to_preterminal, preterminals, nt_chains, rhss_to_lhs, rhs_l_to_lhs, rhs_r_to_lhs)
 }
 
+// Returns a HashMap: F -> P(R), i.e. gives all rules deriving a certain feature structure.
+// This way terminals are only compared with the number of unique feature structures
+// and not with every rule itself.
+//
+// For now it gives you the POS tag (original name, i.e., a String!)
+fn embed_rules_pos(word_to_preterminal: &ToNTVec<String>, bin_ntdict: &HashMap<NT, String>) -> HashMap<String, Vec<(String, NT, f64)>> {
+    let mut result = HashMap::new();
+    for (word, pret_vect) in word_to_preterminal {
+        for &(nt, logprob) in pret_vect {
+            result.entry(bin_ntdict.get(&nt).unwrap().clone()).or_insert_with(Vec::new).push((word.clone(), nt, logprob));
+        }
+    }
+    return result;
+}
+
 #[allow(dead_code)]
 pub fn cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, sents: &'a [String], stats: &mut PCFGParsingStatistics) -> Vec<HashMap<NT, (f64, ParseTree<'a>)>> {
     // Build helper dicts for quick access. All are bottom-up in the parse.
@@ -311,12 +326,13 @@ fn hashmap_to_vec<V: Default>(hm: HashMap<usize, V>) -> Vec<V> {
     mapvec
 }
 
-pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, sents: &'a [String], stats: &mut PCFGParsingStatistics) -> Vec<HashMap<NT, (f64, ParseTree<'a>)>> {
+pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_ntdict: &HashMap<NT, String>, sents: &'a [String], poss: &'a [String], stats: &mut PCFGParsingStatistics) -> Vec<HashMap<NT, (f64, ParseTree<'a>)>> {
     // Build helper dicts for quick access. All are bottom-up in the parse.
     let t = get_usertime();
     let ntcount = bin_rules.len();
     // Get the fat HashMaps...
     let (word_to_preterminal, all_preterminals, nt_chains, _, rhs_l_to_lhs, rhs_r_to_lhs) = preprocess_rules(bin_rules);
+    let feature_to_rules = embed_rules_pos(&word_to_preterminal, bin_ntdict);
     // ...and convert some to Vecs for faster addressing
     let nt_chains_vec: Vec<Vec<(NT, f64)>> = hashmap_to_vec(nt_chains);
     let rhs_l_to_lhs_vec: Vec<Vec<(NT, NT, f64)>> = hashmap_to_vec(rhs_l_to_lhs);
@@ -334,7 +350,7 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, sents
     let mut skips = 0;
     let mut noskips = 0;
     
-    for raw_sent in sents {
+    for (raw_sent, raw_pos) in sents.iter().zip(poss) {
         //println!("parsing: {}", raw_sent);
         
         let mut oov_in_this_sent = false;
@@ -358,37 +374,56 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, sents
         // Kick it off with the terminals!
         let t = get_usertime();
         let uniform_oov_prob = stats.uniform_oov_prob;
-        for (i, w) in sent.iter().enumerate() {
-            match word_to_preterminal.get(*w) {
-                Some(prets) => {
-                    for &(nt, logprob) in prets {
-                        let addr = chart_adr(sentlen, ntcount, i, i + 1, nt);
-                        ckychart[addr].0 = logprob;
-                        agenda.push(AgendaItem(logprob, i, i+1, nt))
-                    }
-                    if stats.all_terms_fallback {
-                        for nt in &all_preterminals {
-                            let addr = chart_adr(sentlen, ntcount, i, i + 1, *nt);
-                            if ckychart[addr].0 == ::std::f64::NEG_INFINITY {
-                                ckychart[addr].0 = uniform_oov_prob;
-                                agenda.push(AgendaItem(uniform_oov_prob, i, i+1, *nt))
+        match stats.feature_structures {
+            FeatureStructures::ExactMatch => {
+                for (i, w) in sent.iter().enumerate() {
+                    match word_to_preterminal.get(*w) {
+                        Some(prets) => {
+                            for &(nt, logprob) in prets {
+                                let addr = chart_adr(sentlen, ntcount, i, i + 1, nt);
+                                ckychart[addr].0 = logprob;
+                                agenda.push(AgendaItem(logprob, i, i+1, nt))
+                            }
+                            if stats.all_terms_fallback {
+                                for nt in &all_preterminals {
+                                    let addr = chart_adr(sentlen, ntcount, i, i + 1, *nt);
+                                    if ckychart[addr].0 == ::std::f64::NEG_INFINITY {
+                                        ckychart[addr].0 = uniform_oov_prob;
+                                        agenda.push(AgendaItem(uniform_oov_prob, i, i+1, *nt))
+                                    }
+                                }
+                            }
+                        }
+                        None => {
+                            oov_in_this_sent = true;
+                            stats.oov_words += 1;
+                            match stats.oov_handling {
+                                OOVHandling::Zero => (),
+                                OOVHandling::Uniform => {
+                                    for nt in &all_preterminals {
+                                        let addr = chart_adr(sentlen, ntcount, i, i + 1, *nt);
+                                        ckychart[addr].0 = uniform_oov_prob;
+                                        agenda.push(AgendaItem(uniform_oov_prob, i, i+1, *nt))
+                                    }
+                                },
+                                OOVHandling::Marginal => panic!("Unimplemented")
                             }
                         }
                     }
                 }
-                None => {
-                    oov_in_this_sent = true;
-                    stats.oov_words += 1;
-                    match stats.oov_handling {
-                        OOVHandling::Zero => (),
-                        OOVHandling::Uniform => {
-                            for nt in &all_preterminals {
-                                let addr = chart_adr(sentlen, ntcount, i, i + 1, *nt);
-                                ckychart[addr].0 = uniform_oov_prob;
-                                agenda.push(AgendaItem(uniform_oov_prob, i, i+1, *nt))
+            },
+            FeatureStructures::POSTagsOnly => {
+                for (i, pos) in raw_pos.split(' ').enumerate() {
+                    // go through HashMap<String, Vec<(String, NT, f64)>>
+                    for (pos_r, rules) in &feature_to_rules {
+                        if pos_r == pos {
+                            for &(_, nt, _) in rules {
+                                let addr = chart_adr(sentlen, ntcount, i, i + 1, nt);
+                                let logprob = 0.0;
+                                ckychart[addr].0 = logprob;
+                                agenda.push(AgendaItem(logprob, i, i+1, nt))
                             }
-                        },
-                        OOVHandling::Marginal => panic!("Unimplemented")
+                        }
                     }
                 }
             }

@@ -154,21 +154,23 @@ pub fn ptb_train(wsj_path: &str, stats: &mut PCFGParsingStatistics) -> (HashMap<
     (lhs_to_rhs_prob, reverse_bijection(&rev_ntdict))
 }
 
-pub fn ptb_test(wsj_path: &str, stats: &PCFGParsingStatistics) -> (Vec<String>, Vec<PTBTree>) {
+pub fn ptb_test(wsj_path: &str, stats: &PCFGParsingStatistics) -> (Vec<String>, Vec<String>, Vec<PTBTree>) {
     //println!("Reading, stripping and yielding test sentences...");
     let read_devtrees = ptb_reader::parse_ptb_sections(wsj_path, vec![22]);
     
     let mut devsents: Vec<String> = Vec::new();
+    let mut devposs: Vec<String> = Vec::new();
     let mut devtrees: Vec<PTBTree> = Vec::new();
     for mut t in read_devtrees {
         t.strip_all_predicate_annotations();
         if t.front_length() <= stats.testmaxlen && devtrees.len() < stats.testsize {
             devsents.push(t.front());
+            devposs.push(t.pos_front());
             devtrees.push(t);
         }
     }
     assert_eq!(devtrees.len(), stats.testsize);
     //println!("From {} candidates we took {} dev sentences (max length {})!", read_devtrees.len(), devtrees.len(), stats.testmaxlen);
     
-    (devsents, devtrees)
+    (devsents, devposs, devtrees)
 }
