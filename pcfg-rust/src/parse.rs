@@ -413,15 +413,23 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_n
                 }
             },
             FeatureStructures::POSTagsOnly => {
-                for (i, pos) in raw_pos.split(' ').enumerate() {
+                for (i, (w1, pos)) in sent.iter().zip(raw_pos.split(' ')).enumerate() {
                     // go through HashMap<String, Vec<(String, NT, f64)>>
+                    let mut n: usize = 999999999;
                     for (pos_r, rules) in &feature_to_rules {
                         if pos_r == pos {
-                            for &(_, nt, _) in rules {
+                            for &(ref w2, nt, logprob) in rules {
+                                if n == 999999999 {n = nt} else { assert!(n == nt) };
                                 let addr = chart_adr(sentlen, ntcount, i, i + 1, nt);
-                                let logprob = 0.0;
-                                ckychart[addr].0 = logprob;
-                                agenda.push(AgendaItem(logprob, i, i+1, nt))
+                                // p ̃(r(σ'))
+                                //   = p(r) ⋅ (comp + μ ⋅ δ(σ = σ'))   (since we know A = B, comp = 1)
+                                //   = p(r) ⋅ (1.0  + μ ⋅ δ(σ = σ'))   (now into log space...)
+                                //   = p(r) + ln(1 + μ ⋅ δ(σ = σ'))
+                                let logprob = logprob + (1.0 + (if w1 == w2 {stats.mu} else {0.0})).ln();
+                                if ckychart[addr].0 < logprob {
+                                    ckychart[addr].0 = logprob;
+                                    agenda.push(AgendaItem(logprob, i, i+1, nt))
+                                }
                             }
                         }
                     }
@@ -444,6 +452,7 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_n
             
             let base_addr = chart_adr(sentlen, ntcount, i, j, base_nt);
             //assert_eq!(ckychart[base_addr].0, base_score); // <- this actually does not hold, since it could have been updated in the meantime!
+            assert!(base_score <= ckychart[base_addr].0); // This does. We should never have better agenda entries than chart entries.
             
             // Check if the score is still the same in the chart as in the agenda...
             if base_score < ckychart[base_addr].0 {

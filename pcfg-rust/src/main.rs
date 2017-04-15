@@ -179,6 +179,7 @@ fn main() {
         testmaxlen: 40,
         oov_handling: OOVHandling::Zero,
         feature_structures: FeatureStructures::ExactMatch,
+        mu: 0.0,
         all_terms_fallback: false,
         exhaustive: false,
         uniform_oov_prob: -10.0
@@ -207,6 +208,9 @@ fn main() {
         ap.refer(&mut stats.feature_structures)
             .add_option(&["--featurestructures"], Store,
             "Feature structures: exactmatch (default), postagsonly");
+        ap.refer(&mut stats.mu)
+            .add_option(&["--mu"], Store,
+            "Reward factor for exact matches when matching softly (default: 0.0)");
         ap.refer(&mut stats.all_terms_fallback)
             .add_option(&["--all-terms-fallback"], StoreTrue,
             "Allows OOV-like treatment to all terms as fallback");
