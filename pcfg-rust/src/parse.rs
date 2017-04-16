@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::collections::BinaryHeap;
 
 use defs::*;
+use featurestructures::embed_rules_pos;
 
 type ToVecOf<T,S> = HashMap<T, Vec<S>>;
 type ToNTVec<T> = HashMap<T, Vec<(NT, f64)>>;
@@ -44,21 +45,6 @@ fn preprocess_rules(bin_rules: &HashMap<NT, HashMap<RHS, f64>>)
     let preterminals: Vec<NT> = preterminals_set.into_iter().collect();
     
     (word_to_preterminal, preterminals, nt_chains, rhss_to_lhs, rhs_l_to_lhs, rhs_r_to_lhs)
-}
-
-// Returns a HashMap: F -> P(R), i.e. gives all rules deriving a certain feature structure.
-// This way terminals are only compared with the number of unique feature structures
-// and not with every rule itself.
-//
-// For now it gives you the POS tag (original name, i.e., a String!)
-fn embed_rules_pos(word_to_preterminal: &ToNTVec<String>, bin_ntdict: &HashMap<NT, String>) -> HashMap<String, Vec<(String, NT, f64)>> {
-    let mut result = HashMap::new();
-    for (word, pret_vect) in word_to_preterminal {
-        for &(nt, logprob) in pret_vect {
-            result.entry(bin_ntdict.get(&nt).unwrap().clone()).or_insert_with(Vec::new).push((word.clone(), nt, logprob));
-        }
-    }
-    return result;
 }
 
 /// Adressing a CKY chart

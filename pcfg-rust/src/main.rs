@@ -16,6 +16,7 @@ use ptb_reader::PTBTree;
 mod defs;
 use defs::*;
 mod extract;
+mod featurestructures;
 mod parse;
 
 fn parsetree2ptbtree(ntdict: &HashMap<NT, String>, t: &ParseTree) -> PTBTree {
