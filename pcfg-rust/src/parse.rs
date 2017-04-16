@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::collections::BinaryHeap;
 
 use defs::*;
-use featurestructures::embed_rules_pos;
+use featurestructures::*;
 
 type ToVecOf<T,S> = HashMap<T, Vec<S>>;
 type ToNTVec<T> = HashMap<T, Vec<(NT, f64)>>;
@@ -149,7 +149,7 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_n
     let ntcount = bin_rules.len();
     // Get the fat HashMaps...
     let (word_to_preterminal, all_preterminals, nt_chains, _, rhs_l_to_lhs, rhs_r_to_lhs) = preprocess_rules(bin_rules);
-    let feature_to_rules = embed_rules_pos(&word_to_preterminal, bin_ntdict);
+    let terminal_matcher = embed_rules(&word_to_preterminal, bin_ntdict, stats);
     // ...and convert some to Vecs for faster addressing
     let nt_chains_vec: Vec<Vec<(NT, f64)>> = hashmap_to_vec(nt_chains);
     let rhs_l_to_lhs_vec: Vec<Vec<(NT, NT, f64)>> = hashmap_to_vec(rhs_l_to_lhs);
@@ -191,8 +191,8 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_n
         // Kick it off with the terminals!
         let t = get_usertime();
         let uniform_oov_prob = stats.uniform_oov_prob;
-        match stats.feature_structures {
-            FeatureStructures::ExactMatch => {
+        match terminal_matcher {
+            TerminalMatcher::ExactMatchOnly => {
                 for (i, w) in sent.iter().enumerate() {
                     match word_to_preterminal.get(*w) {
                         Some(prets) => {
@@ -229,11 +229,12 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_n
                     }
                 }
             },
-            FeatureStructures::POSTagsOnly => {
+            TerminalMatcher::POSTagMatcher(ref feature_to_rules) => {
                 for (i, (w1, pos)) in sent.iter().zip(raw_pos.split(' ')).enumerate() {
-                    // go through HashMap<String, Vec<(String, NT, f64)>>
+                    // We wanna assert that only one NT is usable per terminals (duh)
                     let mut n: usize = 999999999;
-                    for (pos_r, rules) in &feature_to_rules {
+                    // go through HashMap<String, Vec<(String, NT, f64)>>
+                    for (pos_r, rules) in feature_to_rules {
                         if pos_r == pos {
                             for &(ref w2, nt, logprob) in rules {
                                 if n == 999999999 {n = nt} else { assert!(n == nt) };

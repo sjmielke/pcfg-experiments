@@ -179,7 +179,7 @@ fn main() {
         testsize: 500,
         testmaxlen: 40,
         oov_handling: OOVHandling::Zero,
-        feature_structures: FeatureStructures::ExactMatch,
+        feature_structures: "exactmatch".to_string(),
         mu: 0.0,
         all_terms_fallback: false,
         exhaustive: false,

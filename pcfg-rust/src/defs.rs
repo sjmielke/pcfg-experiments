@@ -71,33 +71,6 @@ impl ::std::str::FromStr for OOVHandling {
     }
 }
 
-// FeatureStructures
-
-#[derive(Clone)]
-pub enum FeatureStructures {
-    ExactMatch,
-    POSTagsOnly
-}
-impl ::std::fmt::Display for FeatureStructures {
-    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        match *self {
-            FeatureStructures::ExactMatch => write!(f, "exactmatch"),
-            FeatureStructures::POSTagsOnly => write!(f, "postagsonly"),
-        }
-    }
-}
-impl ::std::str::FromStr for FeatureStructures {
-    type Err = String;
-    
-    fn from_str(s: &str) -> Result<FeatureStructures, String> {
-        match s {
-            "exactmatch" => Ok(FeatureStructures::ExactMatch),
-            "postagsonly" => Ok(FeatureStructures::POSTagsOnly),
-            _ => Err(format!("Invalid FeatureStructures parameter »{}«", s))
-        }
-    }
-}
-
 // #################################### All flags / statistics ####################################
 
 #[derive(Clone)]
@@ -110,7 +83,7 @@ pub struct PCFGParsingStatistics {
     pub all_terms_fallback: bool,
     pub exhaustive: bool,
     pub uniform_oov_prob: f64,
-    pub feature_structures: FeatureStructures,
+    pub feature_structures: String,
     pub mu: f64,
     // Raw numbers
     pub unbin_nts: usize,
