@@ -181,6 +181,8 @@ fn main() {
         oov_handling: OOVHandling::Zero,
         feature_structures: "exactmatch".to_string(),
         mu: 0.0,
+        alpha: 0.5,
+        beta: 1.0,
         all_terms_fallback: false,
         exhaustive: false,
         uniform_oov_prob: -10.0
@@ -212,6 +214,12 @@ fn main() {
         ap.refer(&mut stats.mu)
             .add_option(&["--mu"], Store,
             "Reward factor for exact matches when matching softly (default: 0.0)");
+        ap.refer(&mut stats.alpha)
+            .add_option(&["--alpha"], Store,
+            "Hyperparameter alpha (default: 0.5)");
+        ap.refer(&mut stats.beta)
+            .add_option(&["--beta"], Store,
+            "Hyperparameter beta (default: 1.0)");
         ap.refer(&mut stats.all_terms_fallback)
             .add_option(&["--all-terms-fallback"], StoreTrue,
             "Allows OOV-like treatment to all terms as fallback");

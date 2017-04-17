@@ -7,6 +7,7 @@ type POSTag = String;
 #[derive(Debug, Clone)]
 pub enum TerminalMatcher {
     POSTagMatcher (HashMap<POSTag, Vec<(String, NT, f64)>>),
+    LCSRatioMatcher (f64, f64), // alpha, beta
     ExactMatchOnly
 }
 
@@ -25,6 +26,9 @@ pub fn embed_rules(
         },
         "postagsonly" => {
             TerminalMatcher::POSTagMatcher(embed_rules_pos(word_to_preterminal, bin_ntdict))
+        }
+        "lcsratio" => {
+            TerminalMatcher::LCSRatioMatcher(stats.alpha, stats.beta)
         }
         _ => {panic!("Incorrect feature structure / matching algorithm {} requested!", stats.feature_structures)}
     }

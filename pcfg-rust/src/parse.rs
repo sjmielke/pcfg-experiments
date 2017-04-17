@@ -1,6 +1,8 @@
 use std::collections::{HashMap, HashSet};
 use std::collections::BinaryHeap;
 
+extern crate bcmp;
+
 use defs::*;
 use featurestructures::*;
 
@@ -230,20 +232,44 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_n
                 }
             },
             TerminalMatcher::POSTagMatcher(ref feature_to_rules) => {
-                for (i, (w1, pos)) in sent.iter().zip(raw_pos.split(' ')).enumerate() {
+                for (i, (wsent, pos)) in sent.iter().zip(raw_pos.split(' ')).enumerate() {
                     // We wanna assert that only one NT is usable per terminals (duh)
                     let mut n: usize = 999999999;
                     // go through HashMap<String, Vec<(String, NT, f64)>>
                     for (pos_r, rules) in feature_to_rules {
                         if pos_r == pos {
-                            for &(ref w2, nt, logprob) in rules {
+                            for &(ref wrule, nt, logprob) in rules {
                                 if n == 999999999 {n = nt} else { assert!(n == nt) };
                                 let addr = chart_adr(sentlen, ntcount, i, i + 1, nt);
                                 // p ̃(r(σ'))
                                 //   = p(r) ⋅ (comp + μ ⋅ δ(σ = σ'))   (since we know A = B, comp = 1)
                                 //   = p(r) ⋅ (1.0  + μ ⋅ δ(σ = σ'))   (now into log space...)
                                 //   = p(r) + ln(1 + μ ⋅ δ(σ = σ'))
-                                let logprob = logprob + (1.0 + (if w1 == w2 {stats.mu} else {0.0})).ln();
+                                let logprob = logprob + (1.0 + (if wsent == wrule {stats.mu} else {0.0})).ln();
+                                if ckychart[addr].0 < logprob {
+                                    ckychart[addr].0 = logprob;
+                                    agenda.push(AgendaItem(logprob, i, i+1, nt))
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            TerminalMatcher::LCSRatioMatcher(alpha, beta) => {
+                for (i, wsent) in sent.iter().enumerate() {
+                    for (wrule, prets) in &word_to_preterminal {
+                        let wrule_bytes = wrule.as_bytes();
+                        let wsent_bytes = wsent.as_bytes();
+                        let lcs = bcmp::longest_common_substring(wsent_bytes, wrule_bytes, bcmp::AlgoSpec::TreeMatch(0));
+                        let comp: f64 = ((lcs.length as f64) / (alpha * (wrule_bytes.len() as f64) + (1.0-alpha) * (wsent_bytes.len() as f64))).powf(beta);
+                        if comp > 0.0 {
+                            // p ̃(r(σ'))
+                            //   = p(r) ⋅ (comp + μ ⋅ δ(σ = σ'))   (now into log space...)
+                            //   = p(r) + ln(comp + μ ⋅ δ(σ = σ'))
+                            let logprob_addendum: f64 = (comp + (if wrule == wsent {stats.mu} else {0.0})).ln();
+                            for &(nt, logprob) in prets {
+                                let addr = chart_adr(sentlen, ntcount, i, i + 1, nt);
+                                let logprob = logprob + logprob_addendum;
                                 if ckychart[addr].0 < logprob {
                                     ckychart[addr].0 = logprob;
                                     agenda.push(AgendaItem(logprob, i, i+1, nt))
@@ -364,8 +390,8 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_n
         results.push(r)
     }
     
-    println!("useless: {}, used: {}", useless_pops, used_pops);
-    println!("skips: {}, noskips: {}", skips, noskips);
+    //println!("useless: {}, used: {}", useless_pops, used_pops);
+    //println!("skips: {}, noskips: {}", skips, noskips);
     
     results
 }
