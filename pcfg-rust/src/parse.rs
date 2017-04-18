@@ -1,8 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::collections::BinaryHeap;
 
-extern crate bcmp;
-
 use defs::*;
 use featurestructures::*;
 
@@ -258,10 +256,9 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_n
             TerminalMatcher::LCSRatioMatcher(alpha, beta) => {
                 for (i, wsent) in sent.iter().enumerate() {
                     for (wrule, prets) in &word_to_preterminal {
-                        let wrule_bytes = wrule.as_bytes();
-                        let wsent_bytes = wsent.as_bytes();
-                        let lcs = bcmp::longest_common_substring(wsent_bytes, wrule_bytes, bcmp::AlgoSpec::TreeMatch(0));
-                        let comp: f64 = ((lcs.length as f64) / (alpha * (wrule_bytes.len() as f64) + (1.0-alpha) * (wsent_bytes.len() as f64))).powf(beta);
+                        let wrule_seq: Vec<_> = wrule.chars().collect();
+                        let wsent_seq: Vec<_> = wsent.chars().collect();
+                        let comp: f64 = ((lcs_dyn_prog(wrule_seq.as_slice(), wsent_seq.as_slice()) as f64) / (alpha * (wrule_seq.len() as f64) + (1.0-alpha) * (wsent_seq.len() as f64))).powf(beta);
                         if comp > 0.0 {
                             // p ̃(r(σ'))
                             //   = p(r) ⋅ (comp + μ ⋅ δ(σ = σ'))   (now into log space...)
