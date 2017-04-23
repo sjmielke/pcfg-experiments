@@ -20,13 +20,17 @@ def pos_gold_plots(relative):
     
     pg_df = join_file_frames([logroot + "/pos_soft_matching_trainsize_mu_{}.log".format(i) for i in range(1,5)], indices)
     
+    pg_df = pg_df.append(join_file_frames([logroot + "/pos_soft_matching_trainsize_mu_others.log"], indices))
+    
     fig, axes = plt.subplots(2, 2, figsize=(9, 6))
 
     pg_df = pg_df.xs('postagsonly', level='feature_structures')
     pg_df = pg_df.reset_index()
     rootdata = pg_df[pg_df.trainsize > 10]
 
-    facets = [("full raw data", 1, 0), ("full data, avg. window 3", 3, 0), ("4 bins, avg. window 3", 3, 4), ("2 bins, moving avg. window 3", 3, 2)]
+    windowsize = 5
+
+    facets = [("full raw data", 1, 0), ("full data, avg. window {}".format(windowsize), windowsize, 0), ("4 bins, avg. window {}".format(windowsize), windowsize, 4), ("2 bins, moving avg. window {}".format(windowsize), windowsize, 2)]
 
     for j in [0,1]:
         for i in [0,1]:
@@ -47,11 +51,21 @@ def pos_gold_plots(relative):
             errs = pg_df.pivot_table(index='mu', columns='trainsize', values='fmeasure', aggfunc=np.std)
             
             means = means.rolling(window=smoothify, min_periods=1).mean()
+            
             if relative:
                 means = means.apply(lambda ser: ser / ser[0])
                 #means = means.apply(lambda ser: (ser - ser[100]) / (ser[0] - ser[100]))
             
-            means.plot(ax=axes[j][i], marker='o', markersize=2) #, yerr=errs)
+            errs = means.rolling(window=smoothify, min_periods=1).std()
+            
+            means.plot(ax=axes[j][i], marker='o', markersize=2, yerr=errs, elinewidth=0.75)
+            # lo = means - errs
+            # hi = means + errs
+            # try:
+            #     axes[j][i].fill_between(means.index, lo['50-1000'], hi['50-1000'], alpha=0.8)
+            #     axes[j][i].fill_between(means.index, lo['5000-39000'], hi['5000-39000'], alpha=0.8)
+            # except:
+            #     pass
             
             axes[j][i].legend(loc='upper right', title='train size', prop={'size':7})
 
@@ -62,7 +76,7 @@ def pos_gold_plots(relative):
 
     fig.tight_layout()
     fig.savefig('/tmp/pos_plot.pdf', format='pdf', dpi=1000)
-    #fig.savefig('/tmp/pos_plot.png', format='png', dpi=1000)
+    fig.savefig('/tmp/pos_plot.png', format='png', dpi=1000)
 
 
 def lcs_plots():
@@ -70,7 +84,7 @@ def lcs_plots():
 
     lcs_df = join_file_frames([logroot + "/lcsratio_trainsize_beta_mu_{}.log".format(i) for i in range(1,9)] + [logroot + "/lcsratio_beta_50.log", logroot + "/lcsratio_mu_500_1000.log"], indices)
 
-    lcs_df_2 = lcs_df.append(join_file_frames([logroot + "/lcsratio_beta_20_mu_100.log", logroot + "/lcsratio_beta_6_8_12_14_17_20_mu_100.log"], indices))
+    lcs_df_2 = lcs_df.append(join_file_frames([logroot + "/lcsratio_beta_20_mu_100.log", logroot + "/lcsratio_beta_6_8_12_14_17_20_mu_100.log", logroot + "/lcsratio_beta_60_70_80_90_100_mu_0_100.log", logroot + "/lcsratio_beta_6_8_12_14_17_20_mu_0.log", logroot + "/lcsratio_beta_30_40_mu_0_100.log"], indices))
 
     tss = [10,50,100,500,1000,5000,10000,20000,39000]
 
@@ -108,23 +122,25 @@ def lcs_plots():
 
     def lcs_ratio_betaplot():
         # tells us beta = 10 is decent?
-        fig, ax = plt.subplots(1, 1, figsize=(5, 3))
+        fig, [mu0ax, mu100ax] = plt.subplots(1, 2, figsize=(9, 3), sharey=True)
 
-        mu100 = lcs_df_2.xs('lcsratio', level='feature_structures')
-        mu100 = mu100.xs(100, level='mu')
-        mu100 = mu100.reset_index()
-        mu100 = mu100[mu100.trainsize > 10]
-
-        means = mu100.pivot_table(index='beta', columns='trainsize', values='fmeasure', aggfunc=np.mean)
-        errs = mu100.pivot_table(index='beta', columns='trainsize', values='fmeasure', aggfunc=np.std)
-        means.plot(ax=ax, marker='o', markersize=2, yerr=errs)
+        for (mu, ax) in [(0, mu0ax), (100, mu100ax)]:
+            df = lcs_df_2.xs('lcsratio', level='feature_structures')
+            df = df.xs(mu, level='mu')
+            df = df.reset_index()
+            df = df[df.trainsize > 10]
+            
+            means = df.pivot_table(index='beta', columns='trainsize', values='fmeasure', aggfunc=np.mean)
+            means.plot(ax=ax, marker='o', markersize=2)
+            
+            ax.legend(loc='lower left', title='train size', prop={'size':7})
+            ax.set_xscale('symlog', linthreshx=0.1, linscalex=0.2)
+            ax.set_xlabel("$\\beta$", labelpad=0)
+            ax.set(ylabel='$F_1$ measure')
+            ax.grid(True)
         
-        ax.legend(loc='lower left', title='train size', prop={'size':7})
-
-        ax.set_xscale('symlog', linthreshx=0.1, linscalex=0.2)
-        ax.set_xlabel("$\\beta$", labelpad=0)
-        ax.set(ylabel='$F_1$ measure', title="Choice of $\\beta$")
-        ax.grid(True)
+        mu0ax.set(title="Choice of $\\beta$ for $\\mu=0$")
+        mu100ax.set(title="Choice of $\\beta$ for $\\mu=100$")
 
         fig.tight_layout()
         fig.savefig('/tmp/lcs_beta_plot.pdf', format='pdf', dpi=1000)
@@ -133,5 +149,5 @@ def lcs_plots():
     lcs_ratio_betaplot()
 
 
-#pos_gold_plots(relative=True)
-lcs_plots()
+pos_gold_plots(relative=True)
+#lcs_plots()
