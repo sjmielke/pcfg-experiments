@@ -87,6 +87,7 @@ pub struct PCFGParsingStatistics {
     pub mu: f64,
     pub alpha: f64,
     pub beta: f64,
+    pub kappa: usize,
     // Raw numbers
     pub unbin_nts: usize,
     pub bin_nts: usize,
@@ -106,7 +107,7 @@ pub struct PCFGParsingStatistics {
 impl PCFGParsingStatistics {
     pub fn print(&self, head: bool) {
         if head {
-            println!("trainsize\ttestsize\ttestmaxlen\tunbin_nts\tbin_nts\toov_handling\tuniform_oov_prob\tfeature_structures\tmu\talpha\tbeta\tall_terms_fallback\texhaustive\tgram_ext_bin\tcky_prep\tcky_terms\tcky_higher\toov_words\toov_sents\tparsefails\tfmeasure\tfmeasure (fail ok)");
+            println!("trainsize\ttestsize\ttestmaxlen\tunbin_nts\tbin_nts\toov_handling\tuniform_oov_prob\tfeature_structures\tmu\talpha\tbeta\tkappa\tall_terms_fallback\texhaustive\tgram_ext_bin\tcky_prep\tcky_terms\tcky_higher\toov_words\toov_sents\tparsefails\tfmeasure\tfmeasure (fail ok)");
         }
         print!("{}\t", self.trainsize);
         print!("{}\t", self.testsize);
@@ -119,6 +120,7 @@ impl PCFGParsingStatistics {
         print!("{}\t", self.mu);
         print!("{}\t", self.alpha);
         print!("{}\t", self.beta);
+        print!("{}\t", self.kappa);
         print!("{}\t", if self.all_terms_fallback {"all_terms_fallback"} else {"no_fallback"});
         print!("{}\t", if self.exhaustive {"exhaustive"} else {"stop_on_first_goal"});
         print!("{:.3}\t", self.gram_ext_bin);

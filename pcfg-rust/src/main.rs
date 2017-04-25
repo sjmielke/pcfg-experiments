@@ -7,6 +7,10 @@ use std::fs::File;
 use std::io::Write;
 use tempdir::TempDir;
 
+// Caching for feature structures
+#[macro_use]
+extern crate lazy_static;
+
 extern crate argparse;
 use argparse::{ArgumentParser, Store, StoreTrue};
 
@@ -183,6 +187,7 @@ fn main() {
         mu: 0.0,
         alpha: 0.5,
         beta: 1.0,
+        kappa: 1,
         all_terms_fallback: false,
         exhaustive: false,
         uniform_oov_prob: -10.0
@@ -220,6 +225,9 @@ fn main() {
         ap.refer(&mut stats.beta)
             .add_option(&["--beta"], Store,
             "Hyperparameter beta (default: 1.0)");
+        ap.refer(&mut stats.kappa)
+            .add_option(&["--kappa"], Store,
+            "Hyperparameter kappa (default: 1)");
         ap.refer(&mut stats.all_terms_fallback)
             .add_option(&["--all-terms-fallback"], StoreTrue,
             "Allows OOV-like treatment to all terms as fallback");

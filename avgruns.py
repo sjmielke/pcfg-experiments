@@ -150,4 +150,4 @@ def lcs_plots():
 
 
 pos_gold_plots(relative=True)
-#lcs_plots()
+lcs_plots()

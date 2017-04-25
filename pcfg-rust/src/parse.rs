@@ -259,6 +259,7 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_n
                         let wrule_seq: Vec<_> = wrule.chars().collect();
                         let wsent_seq: Vec<_> = wsent.chars().collect();
                         let comp: f64 = ((lcs_dyn_prog(wrule_seq.as_slice(), wsent_seq.as_slice()) as f64) / (alpha * (wrule_seq.len() as f64) + (1.0-alpha) * (wsent_seq.len() as f64))).powf(beta);
+                        
                         if comp > 0.0 {
                             // p ̃(r(σ'))
                             //   = p(r) ⋅ (comp + μ ⋅ δ(σ = σ'))   (now into log space...)
@@ -266,6 +267,33 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_n
                             let logprob_addendum: f64 = (comp + (if wrule == wsent {stats.mu} else {0.0})).ln();
                             for &(nt, logprob) in prets {
                                 let addr = chart_adr(sentlen, ntcount, i, i + 1, nt);
+                                let logprob = logprob + logprob_addendum;
+                                if ckychart[addr].0 < logprob {
+                                    ckychart[addr].0 = logprob;
+                                    agenda.push(AgendaItem(logprob, i, i+1, nt))
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            TerminalMatcher::DiceMatcher(kappa, ref ngrams_to_rules) => {
+                for (i, wsent) in sent.iter().enumerate() {
+                    // go through Vec<(HashSet<Vec<char>>, Vec<(String, NT, f64)>)>
+                    for &(ref ngrams_rule, ref rules) in ngrams_to_rules {
+                        // calculate dice coefficient
+                        let ngrams_sent = get_ngrams(kappa, wsent);
+                        let inter = ngrams_sent.intersection(&ngrams_rule).count() as f64;
+                        let sum = (ngrams_sent.len() + ngrams_rule.len()) as f64;
+                        let comp = 2.0 * inter / sum; // dice
+                        
+                        if comp > 0.0 {
+                            // p ̃(r(σ'))
+                            //   = p(r) ⋅ (comp + μ ⋅ δ(σ = σ'))   (now into log space...)
+                            //   = p(r) + ln(comp + μ ⋅ δ(σ = σ'))
+                            for &(ref wrule, nt, logprob) in rules {
+                                let addr = chart_adr(sentlen, ntcount, i, i + 1, nt);
+                                let logprob_addendum: f64 = (comp + (if wrule == wsent {stats.mu} else {0.0})).ln();
                                 let logprob = logprob + logprob_addendum;
                                 if ckychart[addr].0 < logprob {
                                     ckychart[addr].0 = logprob;
