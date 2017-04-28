@@ -184,7 +184,7 @@ fn main() {
         testmaxlen: 40,
         oov_handling: OOVHandling::Zero,
         feature_structures: "exactmatch".to_string(),
-        mu: 0.0,
+        eta: 1.0,
         alpha: 0.5,
         beta: 1.0,
         kappa: 1,
@@ -216,9 +216,9 @@ fn main() {
         ap.refer(&mut stats.feature_structures)
             .add_option(&["--featurestructures"], Store,
             "Feature structures: exactmatch (default), postagsonly");
-        ap.refer(&mut stats.mu)
-            .add_option(&["--mu"], Store,
-            "Reward factor for exact matches when matching softly (default: 0.0)");
+        ap.refer(&mut stats.eta)
+            .add_option(&["--eta"], Store,
+            "Softness factor (default: 1.0)");
         ap.refer(&mut stats.alpha)
             .add_option(&["--alpha"], Store,
             "Hyperparameter alpha (default: 0.5)");

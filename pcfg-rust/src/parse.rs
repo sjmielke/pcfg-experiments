@@ -240,10 +240,11 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_n
                                 if n == 999999999 {n = nt} else { assert!(n == nt) };
                                 let addr = chart_adr(sentlen, ntcount, i, i + 1, nt);
                                 // p ̃(r(σ'))
-                                //   = p(r) ⋅ (comp + μ ⋅ δ(σ = σ'))   (since we know A = B, comp = 1)
-                                //   = p(r) ⋅ (1.0  + μ ⋅ δ(σ = σ'))   (now into log space...)
-                                //   = p(r) + ln(1 + μ ⋅ δ(σ = σ'))
-                                let logprob = logprob + (1.0 + (if wsent == wrule {stats.mu} else {0.0})).ln();
+                                //   = p(r) ⋅ (η ⋅ comp + (1-η) ⋅ δ(σ = σ'))   (since we know A = B, comp = 1)
+                                //   = p(r) ⋅ (η + (1-η) ⋅ δ(σ = σ'))   (now into log space...)
+                                //   = p(r) + ln(η + (1-η) ⋅ δ(σ = σ'))
+                                let logprob_addendum = (stats.eta + (if wsent == wrule {1.0-stats.eta} else {0.0})).ln();
+                                let logprob = logprob + logprob_addendum;
                                 if ckychart[addr].0 < logprob {
                                     ckychart[addr].0 = logprob;
                                     agenda.push(AgendaItem(logprob, i, i+1, nt))
@@ -262,9 +263,9 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_n
                         
                         if comp > 0.0 {
                             // p ̃(r(σ'))
-                            //   = p(r) ⋅ (comp + μ ⋅ δ(σ = σ'))   (now into log space...)
-                            //   = p(r) + ln(comp + μ ⋅ δ(σ = σ'))
-                            let logprob_addendum: f64 = (comp + (if wrule == wsent {stats.mu} else {0.0})).ln();
+                            //   = p(r) ⋅   (η ⋅ comp + (1-η) ⋅ δ(σ = σ'))   (now into log space...)
+                            //   = p(r) + ln(η ⋅ comp + (1-η) ⋅ δ(σ = σ'))
+                            let logprob_addendum: f64 = (stats.eta * comp + (if wrule == wsent {1.0-stats.eta} else {0.0})).ln();
                             for &(nt, logprob) in prets {
                                 let addr = chart_adr(sentlen, ntcount, i, i + 1, nt);
                                 let logprob = logprob + logprob_addendum;
@@ -289,11 +290,11 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_n
                         
                         if comp > 0.0 {
                             // p ̃(r(σ'))
-                            //   = p(r) ⋅ (comp + μ ⋅ δ(σ = σ'))   (now into log space...)
-                            //   = p(r) + ln(comp + μ ⋅ δ(σ = σ'))
+                            //   = p(r) ⋅   (η ⋅ comp + (1-η) ⋅ δ(σ = σ'))   (now into log space...)
+                            //   = p(r) + ln(η ⋅ comp + (1-η) ⋅ δ(σ = σ'))
                             for &(ref wrule, nt, logprob) in rules {
                                 let addr = chart_adr(sentlen, ntcount, i, i + 1, nt);
-                                let logprob_addendum: f64 = (comp + (if wrule == wsent {stats.mu} else {0.0})).ln();
+                                let logprob_addendum: f64 = (stats.eta * comp + (if wrule == wsent {1.0-stats.eta} else {0.0})).ln();
                                 let logprob = logprob + logprob_addendum;
                                 if ckychart[addr].0 < logprob {
                                     ckychart[addr].0 = logprob;
