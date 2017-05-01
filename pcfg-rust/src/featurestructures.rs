@@ -9,6 +9,7 @@ pub enum TerminalMatcher {
     POSTagMatcher (HashMap<POSTag, Vec<(String, NT, f64)>>),
     LCSRatioMatcher (f64, f64), // alpha, beta
     DiceMatcher (usize, Vec<(HashSet<String>, Vec<(String, NT, f64)>)>), // kappa, assoc list from set of ngrams to list of rules
+    LevenshteinMatcher(f64), // beta, TODO: trie for all for speed?
     ExactMatchOnly
 }
 
@@ -133,6 +134,9 @@ pub fn embed_rules(
                 result.push((ngrams, rules));
             }
             TerminalMatcher::DiceMatcher(stats.kappa, result)
+        }
+        "levenshtein" => {
+            TerminalMatcher::LevenshteinMatcher(stats.beta)
         }
         _ => {panic!("Incorrect feature structure / matching algorithm {} requested!", stats.feature_structures)}
     }

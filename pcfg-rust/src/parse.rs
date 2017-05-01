@@ -1,6 +1,8 @@
 use std::collections::{HashMap, HashSet};
 use std::collections::BinaryHeap;
 
+extern crate strsim;
+
 use defs::*;
 use featurestructures::*;
 
@@ -259,7 +261,11 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_n
                     for (wrule, prets) in &word_to_preterminal {
                         let wrule_seq: Vec<_> = wrule.chars().collect();
                         let wsent_seq: Vec<_> = wsent.chars().collect();
-                        let comp: f64 = ((lcs_dyn_prog(wrule_seq.as_slice(), wsent_seq.as_slice()) as f64) / (alpha * (wrule_seq.len() as f64) + (1.0-alpha) * (wsent_seq.len() as f64))).powf(beta);
+                        let comp: f64 = (
+                                (lcs_dyn_prog(wrule_seq.as_slice(), wsent_seq.as_slice()) as f64)
+                                /
+                                (alpha * (wrule_seq.len() as f64) + (1.0-alpha) * (wsent_seq.len() as f64))
+                            ).powf(beta);
                         
                         if comp > 0.0 {
                             // p ̃(r(σ'))
@@ -295,6 +301,37 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_n
                             for &(ref wrule, nt, logprob) in rules {
                                 let addr = chart_adr(sentlen, ntcount, i, i + 1, nt);
                                 let logprob_addendum: f64 = (stats.eta * comp + (if wrule == wsent {1.0-stats.eta} else {0.0})).ln();
+                                let logprob = logprob + logprob_addendum;
+                                if ckychart[addr].0 < logprob {
+                                    ckychart[addr].0 = logprob;
+                                    agenda.push(AgendaItem(logprob, i, i+1, nt))
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            TerminalMatcher::LevenshteinMatcher(beta) => {
+                for (i, wsent) in sent.iter().enumerate() {
+                    for (wrule, prets) in &word_to_preterminal {
+                        let wrule_seq: Vec<_> = wrule.chars().collect();
+                        let wsent_seq: Vec<_> = wsent.chars().collect();
+                        let comp: f64 = (1.0 - 
+                                (strsim::levenshtein(wsent, wrule) as f64)
+                                /
+                                (::std::cmp::max(wrule.len(), wsent.len()) as f64)
+                            ).powf(beta);
+                            
+                        assert!(comp <= 1.0);
+                        if(comp < 0.0) {panic!("{} - {} = 1- {} / {}", wrule, wsent, strsim::levenshtein(wsent, wrule), ::std::cmp::max(wrule.len(), wsent.len()))}
+                        
+                        if comp > 0.0 {
+                            // p ̃(r(σ'))
+                            //   = p(r) ⋅   (η ⋅ comp + (1-η) ⋅ δ(σ = σ'))   (now into log space...)
+                            //   = p(r) + ln(η ⋅ comp + (1-η) ⋅ δ(σ = σ'))
+                            let logprob_addendum: f64 = (stats.eta * comp + (if wrule == wsent {1.0-stats.eta} else {0.0})).ln();
+                            for &(nt, logprob) in prets {
+                                let addr = chart_adr(sentlen, ntcount, i, i + 1, nt);
                                 let logprob = logprob + logprob_addendum;
                                 if ckychart[addr].0 < logprob {
                                     ckychart[addr].0 = logprob;
