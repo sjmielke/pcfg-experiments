@@ -158,5 +158,87 @@ def lcs_plots():
     lcs_ratio_betaplot()
 
 
-pos_gold_plots(relative=True)
-lcs_plots()
+def dice_plots():
+    indices = ['trainsize','feature_structures','oov_handling','eta','kappa']
+
+    dice_df = join_file_frames([logroot + "/dice_trainsize_kappa_eta.log", logroot + "/dice_trainsize_hugekappa_eta.log", logroot + "/dice_trainsize_kappa_eta_39k.log"], indices)
+
+    tss = [10,50,100,500,1000,5000,10000,20000,39000]
+
+    def dice_monsterplot():
+        fig, ax = plt.subplots(3, 3, figsize=(10, 10), sharex=True) #, sharey=True)
+
+        for j in range(3):
+            for i in range(3):
+                ts = tss[i + 3*j]
+                
+                if (dice_df.index.get_level_values('trainsize') == ts).any():
+                    tsdf = dice_df.xs(ts, level='trainsize')
+                    dice_only_df = tsdf.xs('dice', level='feature_structures')
+                    
+                    mask = dice_only_df.index.get_level_values('kappa').isin([1, 2, 4, 6, 8, 10, 50, 100])
+                    dice_only_df = dice_only_df[mask].reset_index()
+                    
+                    means = dice_only_df.pivot_table(index='eta', columns='kappa', values='fmeasure', aggfunc=np.mean)
+                    errs = dice_only_df.pivot_table(index='eta', columns='kappa', values='fmeasure', aggfunc=np.std)
+                    try:
+                        baseline = dice_df.loc[ts].loc["exactmatch"].loc["uniform"].loc[1.0].loc[1.0]
+                        baseline = baseline['fmeasure']
+                        baseline = np.mean(baseline)
+                        
+                        means.loc[0.0] = baseline
+                        means = means.sort_index()
+                        
+                        means.plot(ax=ax[j][i], marker='o', markersize=2, yerr=errs)
+                        
+                        ax[j][i].axhline(baseline, 0.0, 1.0, linestyle='dashed', linewidth=1, color='black')
+                    except:
+                        pass
+
+                ax[j][i].set_xscale('symlog', linthreshx=0.001, linscalex=0.2)
+                ax[j][i].set_xlabel("$\\eta$", labelpad=0)
+                (bot, top) = ax[j][i].get_ylim()
+                ax[j][i].set_ylim(top - (top-bot)/2, top)
+                ax[j][i].set(ylabel='$F_1$ measure', title="trainsize {}".format(ts))
+                ax[j][i].legend(loc='lower right', title='$\\kappa$', prop={'size':7})
+                ax[j][i].grid(True)
+
+        fig.tight_layout()
+        fig.savefig('/tmp/dice_monsterplot_eta.pdf', format='pdf', dpi=1000)
+        fig.savefig('/tmp/dice_monsterplot_eta.png', format='png', dpi=1000)
+
+    def dice_kappaplot():
+        # tells us kappa = 10 is decent?
+        fig, [eta0ax, eta100ax] = plt.subplots(1, 2, figsize=(9, 3), sharey=True)
+
+        for (eta, ax) in [(0.005, eta0ax), (0.5, eta100ax)]:
+            df = dice_df.xs('dice', level='feature_structures')
+            try:
+                df = df.xs(eta, level='eta')
+                df = df.reset_index()
+                #df = df[df.trainsize > 10]
+                
+                means = df.pivot_table(index='kappa', columns='trainsize', values='fmeasure', aggfunc=np.mean)
+                means.plot(ax=ax, marker='o', markersize=2)
+                
+                ax.legend(loc='upper left', title='train size', prop={'size':7})
+                #ax.set_xscale('symlog', linthreshx=0.1, linscalex=0.2)
+                ax.set_xscale('log')
+                ax.set_xlabel("$\\kappa$", labelpad=0)
+                ax.set(ylabel='$F_1$ measure')
+                ax.grid(True)
+                ax.set(title="Choice of $\\kappa$ for $\\eta={}$".format(eta))
+            except:
+                pass
+
+        fig.tight_layout()
+        fig.savefig('/tmp/dice_kappa_plot_eta.pdf', format='pdf', dpi=1000)
+        fig.savefig('/tmp/dice_kappa_plot_eta.png', format='png', dpi=1000)
+
+    dice_monsterplot()
+    dice_kappaplot()
+
+
+#pos_gold_plots(relative=True)
+#lcs_plots()
+dice_plots()
