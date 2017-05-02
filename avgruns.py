@@ -13,7 +13,7 @@ def join_file_frames(filenames, indices):
     for filename in filenames:
         df = df.append(pd.DataFrame.from_csv(filename, sep='\t', header=0, index_col=indices).applymap(lambda x: round(x, 7) if isinstance(x, float) else x))
 
-    return df
+    return df.sort_index()
 
 def pos_gold_plots(relative):
     indices = ['trainsize','feature_structures','oov_handling','eta']
@@ -239,6 +239,87 @@ def dice_plots():
     dice_kappaplot()
 
 
+def levenshtein_plots():
+    indices = ['trainsize','feature_structures','oov_handling','eta','beta']
+
+    levenshtein_df = join_file_frames([logroot + "/levenshtein_trainsize_beta_eta.log"], indices)
+
+    tss = [10,50,100,500,1000,5000,10000,20000,39000]
+
+    def levenshtein_monsterplot():
+        fig, ax = plt.subplots(3, 3, figsize=(10, 10) )#, sharex=True) #, sharey=True)
+
+        for j in range(3):
+            for i in range(3):
+                ts = tss[i + 3*j]
+                
+                if (levenshtein_df.index.get_level_values('trainsize') == ts).any():
+                    tsdf = levenshtein_df.xs(ts, level='trainsize')
+                    levenshtein_only_df = tsdf.xs('levenshtein', level='feature_structures')
+                    
+                    mask = levenshtein_only_df.index.get_level_values('beta').isin([1.0, 4.0, 10.0, 20.0, 30.0, 50.0])
+                    levenshtein_only_df = levenshtein_only_df[mask].reset_index()
+                    
+                    means = levenshtein_only_df.pivot_table(index='eta', columns='beta', values='fmeasure', aggfunc=np.mean)
+                    errs = levenshtein_only_df.pivot_table(index='eta', columns='beta', values='fmeasure', aggfunc=np.std)
+                    try:
+                        baseline = levenshtein_df.loc[ts].loc["exactmatch"].loc["uniform"].loc[1.0].loc[1.0]
+                        baseline = baseline['fmeasure']
+                        baseline = np.mean(baseline)
+                        
+                        means.loc[0.0] = baseline
+                        means = means.sort_index()
+                        
+                        means.plot(ax=ax[j][i], marker='o', markersize=2, yerr=errs)
+                        
+                        ax[j][i].axhline(baseline, 0.0, 1.0, linestyle='dashed', linewidth=1, color='black')
+                    except:
+                        pass
+
+                    ax[j][i].set_xscale('symlog', linthreshx=0.001, linscalex=0.2)
+                    ax[j][i].set_xlabel("$\\eta$", labelpad=0)
+                    (bot, top) = ax[j][i].get_ylim()
+                    ax[j][i].set_ylim(min(baseline - 1.0, top - (top-bot)/3), top)
+                    ax[j][i].set(ylabel='$F_1$ measure', title="trainsize {}".format(ts))
+                    ax[j][i].legend(loc='lower right', title='$\\beta$', prop={'size':7})
+                    ax[j][i].grid(True)
+
+        fig.tight_layout()
+        fig.savefig('/tmp/levenshtein_monsterplot_eta.pdf', format='pdf', dpi=1000)
+        fig.savefig('/tmp/levenshtein_monsterplot_eta.png', format='png', dpi=1000)
+
+    def levenshtein_betaplot():
+        # tells us beta = 10 is decent?
+        fig, [eta0ax, eta100ax] = plt.subplots(1, 2, figsize=(9, 3), sharey=True)
+
+        for (eta, ax) in [(0.005, eta0ax), (0.5, eta100ax)]:
+            df = levenshtein_df.xs('levenshtein', level='feature_structures')
+            try:
+                df = df.xs(eta, level='eta')
+                df = df.reset_index()
+                #df = df[df.trainsize > 10]
+                
+                means = df.pivot_table(index='beta', columns='trainsize', values='fmeasure', aggfunc=np.mean)
+                means.plot(ax=ax, marker='o', markersize=2)
+                
+                ax.legend(loc='lower left', title='train size', prop={'size':7})
+                ax.set_xscale('symlog', linthreshx=0.1, linscalex=0.2)
+                ax.set_xlabel("$\\beta$", labelpad=0)
+                ax.set(ylabel='$F_1$ measure')
+                ax.grid(True)
+                ax.set(title="Choice of $\\beta$ for $\\eta={}$".format(eta))
+            except:
+                pass
+
+        fig.tight_layout()
+        fig.savefig('/tmp/levenshtein_beta_plot_eta.pdf', format='pdf', dpi=1000)
+        fig.savefig('/tmp/levenshtein_beta_plot_eta.png', format='png', dpi=1000)
+
+    levenshtein_monsterplot()
+    levenshtein_betaplot()
+
+
 #pos_gold_plots(relative=True)
 #lcs_plots()
-dice_plots()
+#dice_plots()
+levenshtein_plots()
