@@ -154,8 +154,35 @@ def lcs_plots():
         fig.savefig('/tmp/lcs_beta_plot_eta.pdf', format='pdf', dpi=1000)
         fig.savefig('/tmp/lcs_beta_plot_eta.png', format='png', dpi=1000)
 
-    lcs_ratio_monsterplot()
-    lcs_ratio_betaplot()
+
+    def lcs_ratio_alphaplot():
+        df = join_file_frames([logroot + "/lcs_trainsize_beta10_eta005_alpha.log"], indices)
+        
+        fig, ax = plt.subplots(1, 1, figsize=(4, 3))
+        
+        try:
+            df = df.reset_index()
+            #df = df[df.trainsize > 10]
+            
+            means = df.pivot_table(index='alpha', columns='trainsize', values='fmeasure', aggfunc=np.mean)
+            means.plot(ax=ax, marker='o', markersize=2)
+            
+            ax.legend(loc='lower right', title='train size', prop={'size':7})
+            #ax.set_xscale('symlog', linthreshx=0.1, linscalex=0.2)
+            ax.set_xlabel("$\\alpha$", labelpad=0)
+            ax.set(ylabel='$F_1$ measure')
+            ax.grid(True)
+            ax.set(title="Choice of $\\alpha$ for $\\eta={}$".format(eta))
+        except:
+            pass
+
+        fig.tight_layout()
+        fig.savefig('/tmp/lcs_alpha_plot_eta.pdf', format='pdf', dpi=1000)
+        fig.savefig('/tmp/lcs_alpha_plot_eta.png', format='png', dpi=1000)
+
+#    lcs_ratio_monsterplot()
+#    lcs_ratio_betaplot()
+    lcs_ratio_alphaplot()
 
 
 def dice_plots():
@@ -320,6 +347,6 @@ def levenshtein_plots():
 
 
 #pos_gold_plots(relative=True)
-#lcs_plots()
+lcs_plots()
 #dice_plots()
-levenshtein_plots()
+#levenshtein_plots()
