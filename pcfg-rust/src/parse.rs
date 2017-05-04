@@ -163,12 +163,6 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_n
     
     let mut results: Vec<HashMap<NT, (f64, ParseTree<'a>)>> = Vec::new();
     
-    let mut useless_pops = 0;
-    let mut used_pops = 0;
-    
-    let mut skips = 0;
-    let mut noskips = 0;
-    
     for (raw_sent, raw_pos) in sents.iter().zip(poss) {
         //println!("parsing: {}", raw_sent);
         
@@ -315,12 +309,10 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_n
             TerminalMatcher::LevenshteinMatcher(beta) => {
                 for (i, wsent) in sent.iter().enumerate() {
                     for (wrule, prets) in &word_to_preterminal {
-                        let wrule_seq: Vec<_> = wrule.chars().collect();
-                        let wsent_seq: Vec<_> = wsent.chars().collect();
                         let comp: f64 = (1.0 - 
                                 (strsim::levenshtein(wsent, wrule) as f64)
                                 /
-                                (::std::cmp::max(wrule.len(), wsent.len()) as f64)
+                                (::std::cmp::max(wrule.chars().count(), wsent.chars().count()) as f64)
                             ).powf(beta);
                             
                         assert!(comp <= 1.0);
@@ -348,11 +340,9 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_n
         
         // Now do the lengthy agenda-working
         let t = get_usertime();
-        let mut done = false;
         while let Some(AgendaItem(base_score, i, j, base_nt)) = agenda.pop() {
             // Let's check if we have a goal item (and can stop) first:
             if i == 0 && j == sentlen && base_nt <= stats.unbin_nts {
-                done = true;
                 if !stats.exhaustive {
                     break
                 }
@@ -365,15 +355,7 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_n
             // Check if the score is still the same in the chart as in the agenda...
             if base_score < ckychart[base_addr].0 {
                 // ...if not we found (and used!) a better one already and can skip this one!
-                skips += 1;
                 continue
-            } else { noskips += 1 }
-            
-            // Counting
-            if done {
-                useless_pops += 1
-            } else {
-                used_pops += 1
             }
             
             //println!("Popping ({}, {}, {})", i, j, base_nt);
@@ -453,9 +435,6 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_n
         }
         results.push(r)
     }
-    
-    //println!("useless: {}, used: {}", useless_pops, used_pops);
-    //println!("skips: {}, noskips: {}", skips, noskips);
     
     results
 }

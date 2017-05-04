@@ -18,12 +18,12 @@ pub fn lcs_dyn_prog<T: Eq>(a: &[T], b: &[T]) -> usize {
     // Fill with 0s in first row/col
     // table_ai=0, table_bi ∈ {0..b.len()}
     let mut v = Vec::new();
-    for bi in 0..b.len() + 1 {
+    for _ in 0..b.len() + 1 {
         v.push(0)
     }
     table.push(v);
     // table_bi=0, table)ai ∈ {1..a.len()} (already did ai=0)
-    for ai in 1..a.len() + 1 {
+    for _ in 1..a.len() + 1 {
         let mut v = Vec::new();
         v.push(0);
         table.push(v)

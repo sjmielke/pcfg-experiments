@@ -267,7 +267,7 @@ fn main() {
             .map(|s| s.to_string())
             .collect::<Vec<String>>()
             .into_iter()
-            .filter(|s| s.split(' ').collect::<Vec<_>>().len() <= stats.testmaxlen)
+            .filter(|s| s.split(' ').count() <= stats.testmaxlen)
             .collect::<Vec<String>>()
     } else {
         testposs
