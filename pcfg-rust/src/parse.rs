@@ -239,14 +239,15 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_n
                                 // p ̃(r(σ'))
                                 //   = p(r) ⋅ (η ⋅ comp + (1-η) ⋅ δ(σ = σ'))  (now into log space...)
                                 //   = p(r) + ln(η ⋅ comp + (1-η) ⋅ δ(σ = σ'))
-                                let logprob_addendum = (
+                                let prob_addendum =
                                     (if pos_r == pos {stats.eta} else {0.0}) +
-                                    (if wsent == wrule {1.0-stats.eta} else {0.0})
-                                ).ln();
-                                let logprob = logprob + logprob_addendum;
-                                if ckychart[addr].0 < logprob {
-                                    ckychart[addr].0 = logprob;
-                                    agenda.push(AgendaItem(logprob, i, i+1, nt))
+                                    (if wsent == wrule {1.0-stats.eta} else {0.0});
+                                if prob_addendum > 0.0 {
+                                    let logprob = logprob + prob_addendum.ln();
+                                    if ckychart[addr].0 < logprob {
+                                        ckychart[addr].0 = logprob;
+                                        agenda.push(AgendaItem(logprob, i, i+1, nt))
+                                    }
                                 }
                             }
                         }
