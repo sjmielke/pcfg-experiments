@@ -2,8 +2,6 @@ use std::collections::{HashMap, HashSet};
 
 use defs::*;
 
-type POSTag = String;
-
 #[derive(Debug, Clone)]
 pub enum TerminalMatcher {
     POSTagMatcher (HashMap<POSTag, Vec<(String, NT, f64)>>),

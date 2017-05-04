@@ -4,7 +4,6 @@ use std::process::Command;
 
 extern crate tempdir;
 use std::fs::File;
-use std::io::prelude::*;
 use std::io::Write;
 use tempdir::TempDir;
 
@@ -255,23 +254,7 @@ fn main() {
     stats.bin_nts   = bin_ntdict.len();
     
     //println!("Now parsing!");
-    let testposs = if stats.testtagsfile != "" {
-        let mut contents = String::new();
-        File::open(&stats.testtagsfile)
-            .expect("no pos file :(")
-            .read_to_string(&mut contents)
-            .expect("unreadable pos file :(");
-        contents.split("\n")
-            .collect::<Vec<&str>>()
-            .into_iter()
-            .map(|s| s.to_string())
-            .collect::<Vec<String>>()
-            .into_iter()
-            .filter(|s| s.split(' ').count() <= stats.testmaxlen)
-            .collect::<Vec<String>>()
-    } else {
-        testposs
-    };
+    let testposs = extract::read_testtagsfile(&stats.testtagsfile, testposs, stats.testmaxlen);
     
     let mut s = stats.clone();
     let parses = parse::agenda_cky_parse(&bin_rules, &bin_ntdict, &testsents, &testposs, &mut s);

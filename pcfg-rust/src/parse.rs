@@ -145,7 +145,7 @@ fn hashmap_to_vec<V: Default>(hm: HashMap<usize, V>) -> Vec<V> {
     mapvec
 }
 
-pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_ntdict: &HashMap<NT, String>, sents: &'a [String], poss: &'a [String], stats: &mut PCFGParsingStatistics) -> Vec<HashMap<NT, (f64, ParseTree<'a>)>> {
+pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_ntdict: &HashMap<NT, String>, sents: &'a [String], poss: &'a Vec<Vec<Vec<(POSTag, f64)>>>, stats: &mut PCFGParsingStatistics) -> Vec<HashMap<NT, (f64, ParseTree<'a>)>> {
     // Build helper dicts for quick access. All are bottom-up in the parse.
     let t = get_usertime();
     let ntcount = bin_rules.len();
@@ -163,7 +163,7 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_n
     
     let mut results: Vec<HashMap<NT, (f64, ParseTree<'a>)>> = Vec::new();
     
-    for (raw_sent, raw_pos) in sents.iter().zip(poss) {
+    for (raw_sent, pos_descs) in sents.iter().zip(poss) {
         //println!("parsing: {}", raw_sent);
         
         let mut oov_in_this_sent = false;
@@ -226,11 +226,23 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_n
                 }
             },
             TerminalMatcher::POSTagMatcher(ref feature_to_rules) => {
-                assert_eq!(raw_pos.split(' ').collect::<Vec<_>>().len(), sentlen);
-                for (i, (wsent, pos)) in sent.iter().zip(raw_pos.split(' ')).enumerate() {
+                assert!(pos_descs.len(), sentlen);
+                for (i, (wsent, wsent_pos_desc)) in sent.iter().zip(pos_descs).enumerate() {
                     // We wanna assert that only one NT is usable per terminals (duh)
                     let mut n: usize = 999999999;
-                    // go through HashMap<String, Vec<(String, NT, f64)>>
+                    
+                    // Extract the argmax POS tag
+                    let mut max_lp = ::std::f64::NEG_INFINITY;
+                    let mut max_pos: &str = "";
+                    for &(ref p, lp) in wsent_pos_desc {
+                        if lp >= max_lp {
+                            max_pos = p;
+                            max_lp = lp
+                        }
+                    }
+                    let pos = max_pos;
+                    
+                    // go through HashMap<POSTag, Vec<(String, NT, f64)>>
                     for (pos_r, rules) in feature_to_rules {
                         if pos_r == pos {
                             for &(ref wrule, nt, logprob) in rules {

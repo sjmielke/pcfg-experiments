@@ -1,4 +1,6 @@
 use std::collections::HashMap;
+use std::fs::File;
+use std::io::prelude::*;
 
 extern crate ptb_reader;
 use ptb_reader::PTBTree;
@@ -173,4 +175,47 @@ pub fn ptb_test(wsj_path: &str, stats: &PCFGParsingStatistics) -> (Vec<String>, 
     //println!("From {} candidates we took {} dev sentences (max length {})!", read_devtrees.len(), devtrees.len(), stats.testmaxlen);
     
     (devsents, devposs, devtrees)
+}
+
+/// Returns a vector of tag-LOGprob pairs for each word of each sentence.
+/// Assumes space separated tag descriptors:
+/// * 1-best: simply the tag.
+/// * n-best: class1/logprob1;c2/l2;...
+pub fn read_testtagsfile(filename: &str, golddata: Vec<String>, testmaxlen: usize) -> Vec<Vec<Vec<(POSTag, f64)>>> {
+    fn decode_td(td: &str) -> Vec<(POSTag, f64)> {
+        let mut ress: Vec<(POSTag, f64)> = Vec::new();
+        for cd in td.split(';') {
+            let v = cd.split('/').collect::<Vec<&str>>();
+            if v.len() != 2 {
+                panic!("'{}' of '{}'", cd, td)
+            }
+            let classname = v[0];
+            let logprob: f64 = v[1].parse().unwrap();
+            ress.push((classname.to_string(), logprob))
+        }
+        ress
+    }
+    
+    if filename != "" {
+        let mut contents = String::new();
+        File::open(filename)
+            .expect("no pos file :(")
+            .read_to_string(&mut contents)
+            .expect("unreadable pos file :(");
+        contents.split("\n")
+            .collect::<Vec<&str>>()
+            .into_iter()
+            .filter(|s| *s != "")
+            .map(|s| s.split(' ')
+                      .map(decode_td)
+                      .collect::<Vec<Vec<(POSTag, f64)>>>())
+            .filter(|v| v.len() <= testmaxlen)
+            .collect::<Vec<Vec<Vec<(POSTag, f64)>>>>()
+    } else {
+        golddata.iter()
+                .map(|s| s.split(' ')
+                          .map(|t| vec![(t.to_string(), 1.0)])
+                          .collect::<Vec<Vec<(POSTag, f64)>>>())
+        .collect::<Vec<Vec<Vec<(POSTag, f64)>>>>()
+    }
 }

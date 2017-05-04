@@ -1,6 +1,7 @@
 // ######################################## Rules, trees ##########################################
 
 pub type NT = usize;
+pub type POSTag = String;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum RHS {

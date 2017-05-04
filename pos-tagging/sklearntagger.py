@@ -51,8 +51,29 @@ def pos_tag(sentence):
     tags = clf.predict([features(sentence, index) for index in range(len(sentence))])
     return list(zip(sentence, tags))
 
+def pos_tags_log_proba(sentence):
+    tags = clf.predict_log_proba([features(sentence, index) for index in range(len(sentence))])
+    bests = []
+    outline = []
+    for (w,l) in [(w, list(zip(clf.named_steps['classifier'].classes_, t))) for w, t in zip(sentence, tags)]:
+        #print(w)
+        s = []
+        maxc = None
+        maxp = -99999999999999999999999
+        for (c, p) in l:
+            if p > maxp:
+                maxc = c
+                maxp = p
+            #print(f"\t{c}\t({p})")
+            assert(';' not in c)
+            assert('/' not in c)
+            s.append(f"{c}/{p}")
+        outline.append(";".join(s))
+        bests.append(maxc)
+    return bests, outline
 
 for n in [10, 50, 100, 500, 1000, 5000, 10000, 20000, 39000]:
+#for n in [500]:
     print(f"n = {n}")
 
     # Train classifier
@@ -71,21 +92,21 @@ for n in [10, 50, 100, 500, 1000, 5000, 10000, 20000, 39000]:
     X_test, y_test = transform_to_dataset(test_sentences)
     print( "Accuracy:", clf.score(X_test, y_test)) # Accuracy: 0.951851851852
 
-    for sec, sents in [("2-21", training_sentences), ("22", test_sentences)]:
-        with open(pref + f'{sec}.sklearn_tagged.{n}.word', 'w') as fw,\
-             open(pref + f'{sec}.sklearn_tagged.{n}.pred', 'w') as ft,\
-             open(pref + f'{sec}.sklearn_tagged.{n}.gold', 'w') as fg:
-            right = 0
-            wrong = 0
-            for (ws, gold) in sents:
-                pred = pos_tag(ws)
-                print(" ".join([w for w, t in pred]), file = fw)
-                print(" ".join([t for w, t in pred]), file = ft)
-                print(" ".join(gold), file = fg)
-                for (g, (_, p)) in zip(gold, pred):
-                    if g == p:
-                        right += 1
-                    else:
-                        wrong += 1
-            acc = 100 * right / (right + wrong)
-            print(f"SJM Accuracy: {acc:.2f}")
+    with open(pref + f'22.sklearn_tagged.{n}.word', 'w') as fw,\
+         open(pref + f'22.sklearn_tagged.{n}.pred', 'w') as ft,\
+         open(pref + f'22.sklearn_tagged.{n}.gold', 'w') as fg:
+        right = 0
+        wrong = 0
+        for (ws, gold) in test_sentences:
+            bests, pred = pos_tags_log_proba(ws)
+            print(" ".join(ws), file = fw)
+            print(" ".join(pred), file = ft)
+            print(" ".join([f"{g}/0.0" for g in gold]), file = fg)
+            #print(gold, bests)
+            for (g, p) in zip(gold, bests):
+                if g == p:
+                    right += 1
+                else:
+                    wrong += 1
+        acc = 100 * right / (right + wrong)
+        print(f"SJM Accuracy: {acc:.2f}")
