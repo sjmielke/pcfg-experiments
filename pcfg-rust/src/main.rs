@@ -185,6 +185,7 @@ fn main() {
         testmaxlen: 40,
         oov_handling: OOVHandling::Zero,
         feature_structures: "exactmatch".to_string(),
+        testtagsfile: "".to_string(),
         eta: 1.0,
         alpha: 0.5,
         beta: 1.0,
@@ -217,6 +218,9 @@ fn main() {
         ap.refer(&mut stats.feature_structures)
             .add_option(&["--featurestructures"], Store,
             "Feature structures: exactmatch (default), postagsonly");
+        ap.refer(&mut stats.testtagsfile)
+            .add_option(&["--testtagsfile"], Store,
+            "POS tags of the test tag file, if parsing with --featurestructures=postagsonly");
         ap.refer(&mut stats.eta)
             .add_option(&["--eta"], Store,
             "Softness factor (default: 1.0)");
@@ -251,17 +255,25 @@ fn main() {
     stats.bin_nts   = bin_ntdict.len();
     
     //println!("Now parsing!");
-    
-    let mut contents = String::new();
-    File::open("/tmp/sklearn.22.tagged.100.pred")
-        .expect("no pos file :(")
-        .read_to_string(&mut contents)
-        .expect("unreadable pos file :(");
-    let testposs_tagged: Vec<&str> = contents.split("\n").collect();
-    let testposs_tagged: Vec<String> = testposs_tagged.into_iter().map(|s| s.to_string()).collect();
-    let testposs_tagged: Vec<String> = testposs_tagged.into_iter().filter(|s| s.split(' ').collect::<Vec<_>>().len() <= stats.testmaxlen).collect();
+    let testposs = if stats.testtagsfile != "" {
+        let mut contents = String::new();
+        File::open(&stats.testtagsfile)
+            .expect("no pos file :(")
+            .read_to_string(&mut contents)
+            .expect("unreadable pos file :(");
+        contents.split("\n")
+            .collect::<Vec<&str>>()
+            .into_iter()
+            .map(|s| s.to_string())
+            .collect::<Vec<String>>()
+            .into_iter()
+            .filter(|s| s.split(' ').collect::<Vec<_>>().len() <= stats.testmaxlen)
+            .collect::<Vec<String>>()
+    } else {
+        testposs
+    };
     
     let mut s = stats.clone();
-    let parses = parse::agenda_cky_parse(&bin_rules, &bin_ntdict, &testsents, &testposs_tagged, &mut s);
+    let parses = parse::agenda_cky_parse(&bin_rules, &bin_ntdict, &testsents, &testposs, &mut s);
     eval_parses(&testsents, &testtrees, parses.clone(), &bin_ntdict, &mut s);
 }

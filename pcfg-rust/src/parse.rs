@@ -324,7 +324,7 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_n
                             ).powf(beta);
                             
                         assert!(comp <= 1.0);
-                        if(comp < 0.0) {panic!("{} - {} = 1- {} / {}", wrule, wsent, strsim::levenshtein(wsent, wrule), ::std::cmp::max(wrule.len(), wsent.len()))}
+                        assert!(comp >= 0.0);
                         
                         if comp > 0.0 {
                             // p ̃(r(σ'))
