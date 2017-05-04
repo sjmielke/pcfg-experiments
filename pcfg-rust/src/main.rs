@@ -185,6 +185,7 @@ fn main() {
         oov_handling: OOVHandling::Zero,
         feature_structures: "exactmatch".to_string(),
         testtagsfile: "".to_string(),
+        nbesttags: false,
         eta: 1.0,
         alpha: 0.5,
         beta: 1.0,
@@ -220,6 +221,9 @@ fn main() {
         ap.refer(&mut stats.testtagsfile)
             .add_option(&["--testtagsfile"], Store,
             "POS tags of the test tag file, if parsing with --featurestructures=postagsonly");
+        ap.refer(&mut stats.nbesttags)
+            .add_option(&["--nbesttags"], StoreTrue,
+            "Parse with all possible tags and their weights instead of just the argmax tag (n/a for gold, duh)");
         ap.refer(&mut stats.eta)
             .add_option(&["--eta"], Store,
             "Softness factor (default: 1.0)");

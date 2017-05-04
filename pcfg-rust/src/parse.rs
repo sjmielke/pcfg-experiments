@@ -226,7 +226,7 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_n
                 }
             },
             TerminalMatcher::POSTagMatcher(ref feature_to_rules) => {
-                assert!(pos_descs.len(), sentlen);
+                assert_eq!(pos_descs.len(), sentlen);
                 for (i, (wsent, wsent_pos_desc)) in sent.iter().zip(pos_descs).enumerate() {
                     // We wanna assert that only one NT is usable per terminals (duh)
                     let mut n: usize = 999999999;
@@ -240,19 +240,32 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_n
                             max_lp = lp
                         }
                     }
-                    let pos = max_pos;
                     
                     // go through HashMap<POSTag, Vec<(String, NT, f64)>>
                     for (pos_r, rules) in feature_to_rules {
-                        if pos_r == pos {
-                            for &(ref wrule, nt, logprob) in rules {
-                                if n == 999999999 {n = nt} else { assert!(n == nt) };
-                                let addr = chart_adr(sentlen, ntcount, i, i + 1, nt);
-                                // p ̃(r(σ'))
-                                //   = p(r) ⋅ (η ⋅ comp + (1-η) ⋅ δ(σ = σ'))  (now into log space...)
-                                //   = p(r) + ln(η ⋅ comp + (1-η) ⋅ δ(σ = σ'))
+                        for &(ref wrule, nt, logprob) in rules {
+                            let addr = chart_adr(sentlen, ntcount, i, i + 1, nt);
+                            // p ̃(r(σ'))
+                            //   = p(r) ⋅ (η ⋅ comp + (1-η) ⋅ δ(σ = σ'))  (now into log space...)
+                            //   = p(r) + ln(η ⋅ comp + (1-η) ⋅ δ(σ = σ'))
+                            if stats.nbesttags {
+                                for &(ref pos, lp) in wsent_pos_desc {
+                                    let prob_addendum =
+                                        (if pos_r == pos   {    stats.eta * lp.exp()} else {0.0}) +
+                                        (if wsent == wrule {1.0-stats.eta           } else {0.0});
+                                    if prob_addendum > 0.0 {
+                                        let logprob = logprob + prob_addendum.ln();
+                                        if ckychart[addr].0 < logprob {
+                                            ckychart[addr].0 = logprob;
+                                            agenda.push(AgendaItem(logprob, i, i+1, nt))
+                                        }
+                                    }
+                                }
+                            } else { //1best
+                                let pos = max_pos;
+                                if pos_r == pos && n == 999999999 {n = nt} else { assert!(pos_r != pos || n == nt) };
                                 let prob_addendum =
-                                    (if pos_r == pos {stats.eta} else {0.0}) +
+                                    (if pos_r == pos   {    stats.eta} else {0.0}) +
                                     (if wsent == wrule {1.0-stats.eta} else {0.0});
                                 if prob_addendum > 0.0 {
                                     let logprob = logprob + prob_addendum.ln();

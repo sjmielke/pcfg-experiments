@@ -86,6 +86,7 @@ pub struct PCFGParsingStatistics {
     pub uniform_oov_prob: f64,
     pub feature_structures: String,
     pub testtagsfile: String,
+    pub nbesttags: bool,
     pub eta: f64,
     pub alpha: f64,
     pub beta: f64,
@@ -109,7 +110,7 @@ pub struct PCFGParsingStatistics {
 impl PCFGParsingStatistics {
     pub fn print(&self, head: bool) {
         if head {
-            println!("trainsize\ttestsize\ttestmaxlen\tunbin_nts\tbin_nts\toov_handling\tuniform_oov_prob\tfeature_structures\ttesttagsfile\teta\talpha\tbeta\tkappa\tall_terms_fallback\texhaustive\tgram_ext_bin\tcky_prep\tcky_terms\tcky_higher\toov_words\toov_sents\tparsefails\tfmeasure\tfmeasure (fail ok)");
+            println!("trainsize\ttestsize\ttestmaxlen\tunbin_nts\tbin_nts\toov_handling\tuniform_oov_prob\tfeature_structures\ttesttagsfile\tnbesttags\teta\talpha\tbeta\tkappa\tall_terms_fallback\texhaustive\tgram_ext_bin\tcky_prep\tcky_terms\tcky_higher\toov_words\toov_sents\tparsefails\tfmeasure\tfmeasure (fail ok)");
         }
         print!("{}\t", self.trainsize);
         print!("{}\t", self.testsize);
@@ -120,6 +121,7 @@ impl PCFGParsingStatistics {
         print!("{}\t", self.uniform_oov_prob);
         print!("{}\t", self.feature_structures);
         print!("{}\t", self.testtagsfile);
+        print!("{}\t", if self.nbesttags {"nbesttags"} else {"1besttags"});
         print!("{}\t", self.eta);
         print!("{}\t", self.alpha);
         print!("{}\t", self.beta);
