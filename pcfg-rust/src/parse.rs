@@ -232,6 +232,7 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_n
                 }
             },
             TerminalMatcher::POSTagMatcher(ref feature_to_rules) => {
+                assert_eq!(raw_pos.split(' ').collect::<Vec<_>>().len(), sentlen);
                 for (i, (wsent, pos)) in sent.iter().zip(raw_pos.split(' ')).enumerate() {
                     // We wanna assert that only one NT is usable per terminals (duh)
                     let mut n: usize = 999999999;

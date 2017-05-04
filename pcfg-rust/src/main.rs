@@ -4,6 +4,7 @@ use std::process::Command;
 
 extern crate tempdir;
 use std::fs::File;
+use std::io::prelude::*;
 use std::io::Write;
 use tempdir::TempDir;
 
@@ -250,10 +251,17 @@ fn main() {
     stats.bin_nts   = bin_ntdict.len();
     
     //println!("Now parsing!");
-    //let mut s1 = stats.clone();
-    //let parses1 = parse::cky_parse(&bin_rules, &testsents, &mut s1);
-    //eval_parses(&testsents, &testtrees, parses1.clone(), &bin_ntdict, &mut s1);
-    let mut s2 = stats.clone();
-    let parses2 = parse::agenda_cky_parse(&bin_rules, &bin_ntdict, &testsents, &testposs, &mut s2);
-    eval_parses(&testsents, &testtrees, parses2.clone(), &bin_ntdict, &mut s2);
+    
+    let mut contents = String::new();
+    File::open("/tmp/sklearn.22.tagged.100.pred")
+        .expect("no pos file :(")
+        .read_to_string(&mut contents)
+        .expect("unreadable pos file :(");
+    let testposs_tagged: Vec<&str> = contents.split("\n").collect();
+    let testposs_tagged: Vec<String> = testposs_tagged.into_iter().map(|s| s.to_string()).collect();
+    let testposs_tagged: Vec<String> = testposs_tagged.into_iter().filter(|s| s.split(' ').collect::<Vec<_>>().len() <= stats.testmaxlen).collect();
+    
+    let mut s = stats.clone();
+    let parses = parse::agenda_cky_parse(&bin_rules, &bin_ntdict, &testsents, &testposs_tagged, &mut s);
+    eval_parses(&testsents, &testtrees, parses.clone(), &bin_ntdict, &mut s);
 }
