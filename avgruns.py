@@ -77,6 +77,70 @@ def pos_gold_plots(relative):
     fig.savefig('/tmp/pos_eta_plot.pdf', format='pdf', dpi=1000)
     fig.savefig('/tmp/pos_eta_plot.png', format='png', dpi=1000)
 
+def tagged_plots():
+    indices = ['trainsize','feature_structures','oov_handling','eta','testtagsfile']
+
+    tagged_df = join_file_frames([logroot + "/tagged_trainsize_eta.log"], indices)
+
+    tss = [10,50,100,500,1000,5000,10000,20000,39000]
+
+    def tagged_monsterplot():
+        fig, ax = plt.subplots(3, 3, figsize=(10, 10), sharex=True) #, sharey=True)
+
+        for j in range(3):
+            for i in range(3):
+                ts = tss[i + 3*j]
+                
+                if (tagged_df.index.get_level_values('trainsize') == ts).any():
+                    tsdf = tagged_df.sort_index()
+                    tsdf = tsdf.groupby(tsdf.index).max()
+                    tsdf.index = pd.MultiIndex.from_tuples(tsdf.index, names=indices)
+                    tsdf = tsdf.xs(ts, level='trainsize')
+                    tagged_only_df = tsdf.xs('postagsonly', level='feature_structures').reset_index()
+                    
+                    means = tagged_only_df.pivot_table(index='eta', columns='testtagsfile', values='fmeasure', aggfunc=np.mean)
+                    
+                    def simplifyfile(s):
+                        l = s.split(".")
+                        mode = l[-1]
+                        sts = l[-2]
+                        if mode == "gold":
+                            return mode
+                        elif sts == "39000":
+                            return "all (39000)"
+                        else:
+                            return sts
+                    
+                    means.columns = means.columns.map(simplifyfile)
+                    means.sort_index(axis=1, inplace=True)
+                    
+                    try:
+                        baseline = tagged_df.loc[ts].loc["exactmatch"].loc["uniform"].loc[1.0].iloc[0]
+                        baseline = baseline['fmeasure']
+                        baseline = np.mean(baseline)
+                        
+                        means.loc[0.0] = baseline
+                        means = means.sort_index()
+                        
+                        means.plot(ax=ax[j][i], marker='o', markersize=2)
+                        
+                        ax[j][i].axhline(baseline, 0.0, 1.0, linestyle='dashed', linewidth=1, color='black')
+                    except:
+                        pass
+
+                ax[j][i].set_xscale('symlog', linthreshx=0.001, linscalex=0.2)
+                ax[j][i].set_xlabel("$\\eta$", labelpad=0)
+                (bot, top) = ax[j][i].get_ylim()
+                ax[j][i].set_ylim(top - (top-bot)/1, top)
+                ax[j][i].set(ylabel='$F_1$ measure', title="trainsize {}".format(ts))
+                ax[j][i].legend(loc='lower right', title='tagger from', prop={'size':7})
+                ax[j][i].grid(True)
+
+        fig.tight_layout()
+        fig.savefig('/tmp/tagged_monsterplot_eta.pdf', format='pdf', dpi=1000)
+        fig.savefig('/tmp/tagged_monsterplot_eta.png', format='png', dpi=1000)
+    
+    tagged_monsterplot()
 
 def lcs_plots():
     indices = ['trainsize','feature_structures','oov_handling','eta','beta']
@@ -180,8 +244,8 @@ def lcs_plots():
         fig.savefig('/tmp/lcs_alpha_plot_eta.pdf', format='pdf', dpi=1000)
         fig.savefig('/tmp/lcs_alpha_plot_eta.png', format='png', dpi=1000)
 
-#    lcs_ratio_monsterplot()
-#    lcs_ratio_betaplot()
+    lcs_ratio_monsterplot()
+    lcs_ratio_betaplot()
     lcs_ratio_alphaplot()
 
 
@@ -347,6 +411,7 @@ def levenshtein_plots():
 
 
 #pos_gold_plots(relative=True)
-lcs_plots()
+tagged_plots()
+#lcs_plots()
 #dice_plots()
 #levenshtein_plots()
