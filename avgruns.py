@@ -78,9 +78,9 @@ def pos_gold_plots(relative):
     fig.savefig('/tmp/pos_eta_plot.png', format='png', dpi=1000)
 
 def tagged_plots():
-    indices = ['trainsize','feature_structures','oov_handling','eta','testtagsfile']
+    indices = ['trainsize','feature_structures','oov_handling','eta','testtagsfile','nbesttags']
 
-    tagged_df = join_file_frames([logroot + "/tagged_trainsize_eta.log"], indices)
+    tagged_df = join_file_frames([logroot + "/tagged_trainsize_eta_no39k.log", logroot + "/tagged_trainsize_eta_only39k.log"], indices)
 
     tss = [10,50,100,500,1000,5000,10000,20000,39000]
 
@@ -98,18 +98,18 @@ def tagged_plots():
                     tsdf = tsdf.xs(ts, level='trainsize')
                     tagged_only_df = tsdf.xs('postagsonly', level='feature_structures').reset_index()
                     
-                    means = tagged_only_df.pivot_table(index='eta', columns='testtagsfile', values='fmeasure', aggfunc=np.mean)
+                    means = tagged_only_df.pivot_table(index='eta', columns=['testtagsfile','nbesttags'], values='fmeasure', aggfunc=np.mean)
                     
                     def simplifyfile(s):
-                        l = s.split(".")
+                        l = s[0].split(".")
                         mode = l[-1]
                         sts = l[-2]
                         if mode == "gold":
-                            return mode
+                            return (mode, s[1])
                         elif sts == "39000":
-                            return "all (39000)"
+                            return ("all (39000)", s[1])
                         else:
-                            return sts
+                            return (sts, s[1])
                     
                     means.columns = means.columns.map(simplifyfile)
                     means.sort_index(axis=1, inplace=True)
@@ -128,10 +128,12 @@ def tagged_plots():
                     except:
                         pass
 
-                ax[j][i].set_xscale('symlog', linthreshx=0.001, linscalex=0.2)
+                ax[j][i].set_xscale('symlog', linthreshx=0.01, linscalex=0.3)
                 ax[j][i].set_xlabel("$\\eta$", labelpad=0)
-                (bot, top) = ax[j][i].get_ylim()
-                ax[j][i].set_ylim(top - (top-bot)/1, top)
+                if ts > 100:
+                    (bot, top) = ax[j][i].get_ylim()
+                    mid = (bot + top) / 2
+                    ax[j][i].set_ylim(mid - 7, mid + 7)
                 ax[j][i].set(ylabel='$F_1$ measure', title="trainsize {}".format(ts))
                 ax[j][i].legend(loc='lower right', title='tagger from', prop={'size':7})
                 ax[j][i].grid(True)
