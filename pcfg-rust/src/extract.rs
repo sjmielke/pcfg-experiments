@@ -218,15 +218,16 @@ pub fn read_testtagsfile(filename: &str, golddata: Vec<String>, testmaxlen: usiz
 pub fn get_data(wsj_path: &str, spmrl_path: &str, stats: &mut PCFGParsingStatistics)
         -> ((HashMap<NT, HashMap<RHS, f64>>, HashMap<NT, String>), (Vec<String>, Vec<Vec<Vec<(POSTag, f64)>>>, Vec<PTBTree>))  {
     
-    let train_trees = match (wsj_path, spmrl_path) {
-        ("", _) => ptb_reader::parse_spmrl_ptb_file(&(spmrl_path.to_string() + "/train/train.German.gold.ptb")).unwrap(),
-        (_, "") => ptb_reader::parse_ptb_sections(wsj_path, (2..22).collect()), // sections 2-21
-        _ => unreachable!()
-    };
-    let test_trees = match (wsj_path, spmrl_path) {
-        ("", _) => ptb_reader::parse_spmrl_ptb_file(&(spmrl_path.to_string() + "/dev/dev.German.gold.ptb")).unwrap(),
-        (_, "") => ptb_reader::parse_ptb_sections(wsj_path, vec![22]), // section 22
-        _ => unreachable!()
+    let lang = stats.language.to_uppercase();
+    
+    let (train_trees, test_trees) = if lang == "ENGLISH" {
+        (ptb_reader::parse_ptb_sections(wsj_path, (2..22).collect()), // sections 2-21
+         ptb_reader::parse_ptb_sections(wsj_path, vec![22])) // section 22)
+    } else {
+        let mut camellang = lang.chars().next().unwrap().to_string();
+        camellang += &lang.to_lowercase()[1..];
+        (ptb_reader::parse_spmrl_ptb_file(&(spmrl_path.to_string() + "/" + &lang + "_SPMRL/gold/ptb/train/train." + &camellang + ".gold.ptb")).unwrap(),
+         ptb_reader::parse_spmrl_ptb_file(&(spmrl_path.to_string() + "/" + &lang + "_SPMRL/gold/ptb/dev/dev." + &camellang + ".gold.ptb")).unwrap())
     };
     
     let (unb_rules, unb_ntdict) = crunch_train_trees(train_trees, &stats);

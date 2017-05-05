@@ -179,6 +179,7 @@ fn main() {
         // Placeholders
         gram_ext_bin:f64::NAN, cky_prep:f64::NAN, cky_terms:f64::NAN, cky_higher:f64::NAN, oov_words:0, oov_sents:0, parsefails:0, fmeasure:f64::NAN, or_fail_fmeasure:f64::NAN, unbin_nts:std::usize::MAX, bin_nts:std::usize::MAX,
         // Values
+        language: "english".to_string(),
         trainsize: 7500,
         testsize: 500,
         testmaxlen: 40,
@@ -196,8 +197,7 @@ fn main() {
     };
     
     let mut wsj_path: String = "/home/sjm/documents/Uni/FuzzySP/treebank-3_LDC99T42/treebank_3/parsed/mrg/wsj".to_string();
-//    let mut spmrl_path: String = "/home/sjm/documents/Uni/FuzzySP/spmrl-2014/data/GERMAN_SPMRL/gold/ptb".to_string();
-    let mut spmrl_path: String = "".to_string();
+    let mut spmrl_path: String = "/home/sjm/documents/Uni/FuzzySP/spmrl-2014/data".to_string();
     
     { // this block limits scope of borrows by ap.refer() method
         let mut ap = ArgumentParser::new();
@@ -249,7 +249,10 @@ fn main() {
             "Path of WSL merged data (.../treebank_3/parsed/mrg/wsj)");
         ap.refer(&mut spmrl_path)
             .add_option(&["--spmrlpath"], Store,
-            "Path of SPMRL data (.../GERMAN_SPMRL/gold/ptb)");
+            "Path of SPMRL data (has to contain GERMAN_SPMRL etc. folders)");
+        ap.refer(&mut stats.language)
+            .add_option(&["--language"], Store,
+            "Language (case-insensitive) ∈ {english, german, ...}");
         ap.parse_args_or_exit();
     }
     
