@@ -226,8 +226,14 @@ pub fn get_data(wsj_path: &str, spmrl_path: &str, stats: &mut PCFGParsingStatist
     } else {
         let mut camellang = lang.chars().next().unwrap().to_string();
         camellang += &lang.to_lowercase()[1..];
-        (ptb_reader::parse_spmrl_ptb_file(&(spmrl_path.to_string() + "/" + &lang + "_SPMRL/gold/ptb/train/train." + &camellang + ".gold.ptb")).unwrap(),
-         ptb_reader::parse_spmrl_ptb_file(&(spmrl_path.to_string() + "/" + &lang + "_SPMRL/gold/ptb/dev/dev." + &camellang + ".gold.ptb")).unwrap())
+        let alltrain_name = spmrl_path.to_string() + "/" + &lang + "_SPMRL/gold/ptb/train/train." + &camellang + ".gold.ptb";
+        let train_5k_name = spmrl_path.to_string() + "/" + &lang + "_SPMRL/gold/ptb/train5k/train5k." + &camellang + ".gold.ptb";
+        let testfile_name = spmrl_path.to_string() + "/" + &lang + "_SPMRL/gold/ptb/dev/dev." + &camellang + ".gold.ptb";
+        let train = match ptb_reader::parse_spmrl_ptb_file(&alltrain_name, false) {
+            Some(t) => t,
+            None => ptb_reader::parse_spmrl_ptb_file(&train_5k_name, false).expect(&format!("Found neither {} nor {}!", alltrain_name, train_5k_name))
+        };
+        (train, ptb_reader::parse_spmrl_ptb_file(&testfile_name, false).expect(&format!("Didn't find {}!", testfile_name)))
     };
     
     let (unb_rules, unb_ntdict) = crunch_train_trees(train_trees, &stats);

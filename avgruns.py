@@ -13,7 +13,7 @@ def join_file_frames(filenames, indices):
     for filename in filenames:
         df = df.append(pd.DataFrame.from_csv(filename, sep='\t', header=0, index_col=indices).applymap(lambda x: round(x, 7) if isinstance(x, float) else x))
 
-    return df.sort_index()
+    return df #.sort_index(axis=0, level=indices, sort_remaining=False)
 
 def pos_gold_plots(relative):
     indices = ['trainsize','feature_structures','oov_handling','eta']
@@ -250,7 +250,6 @@ def lcs_plots():
     lcs_ratio_betaplot()
     lcs_ratio_alphaplot()
 
-
 def dice_plots():
     indices = ['trainsize','feature_structures','oov_handling','eta','kappa']
 
@@ -331,7 +330,6 @@ def dice_plots():
     dice_monsterplot()
     dice_kappaplot()
 
-
 def levenshtein_plots():
     indices = ['trainsize','feature_structures','oov_handling','eta','beta']
 
@@ -411,9 +409,62 @@ def levenshtein_plots():
     levenshtein_monsterplot()
     levenshtein_betaplot()
 
+def ml_tagged_plots():
+    indices = ['language', 'trainsize','feature_structures','oov_handling','eta']
+
+    ml_tagged_df = join_file_frames([logroot + "/multilang_tagged_trainsize_eta.log"], indices)
+
+
+    tss = [10,50,100,500,1000,5000,10000,20000,39000]
+
+    def ml_tagged_monsterplot():
+        fig, ax = plt.subplots(3, 3, figsize=(10, 10)) #, sharex=True) #, sharey=True)
+
+        for j in range(3):
+            for i in range(3):
+                ts = tss[i + 3*j]
+                
+                if (ml_tagged_df.index.get_level_values('trainsize') == ts).any():
+                    tsdf = ml_tagged_df.xs(ts, level='trainsize')
+                    
+                    ml_tagged_only_df = tsdf.xs('postagsonly', level='feature_structures').reset_index()
+                    
+                    means = ml_tagged_only_df.pivot_table(index='eta', columns='language', values='fmeasure', aggfunc=np.mean)
+                    
+                    from collections import OrderedDict
+                    all_langs = list(OrderedDict.fromkeys([t[0] for t in ml_tagged_df.index if t[1] >= ts]))
+                    means = means.reindex(columns=all_langs)
+                    
+                    try:
+                        baseline = tsdf.xs("exactmatch", level='feature_structures').xs("uniform", level='oov_handling').xs(1.0, level='eta')
+                        baseline = baseline['fmeasure']
+                        
+                        means.loc[0.0] = baseline
+                        means = means.sort_index(axis=0, level='eta', sort_remaining=False)
+                        
+                        means.plot(ax=ax[j][i], marker='o', markersize=2)
+                    except:
+                        pass
+
+                ax[j][i].set_xscale('symlog', linthreshx=0.001, linscalex=0.3)
+                ax[j][i].set_xlabel("$\\eta$", labelpad=0)
+                # if ts > 100:
+                #     (bot, top) = ax[j][i].get_ylim()
+                #     mid = (bot + top) / 2
+                #     ax[j][i].set_ylim(mid - 7, mid + 7)
+                ax[j][i].set(ylabel='$F_1$ measure', title="trainsize {}".format(ts))
+                ax[j][i].legend(loc='lower right', title='language', prop={'size':7})
+                ax[j][i].grid(True)
+
+        fig.tight_layout()
+        fig.savefig('/tmp/ml_tagged_monsterplot_eta.pdf', format='pdf', dpi=1000)
+        #fig.savefig('/tmp/ml_tagged_monsterplot_eta.png', format='png', dpi=1000)
+    
+    ml_tagged_monsterplot()
 
 #pos_gold_plots(relative=True)
-tagged_plots()
+#tagged_plots()
 #lcs_plots()
 #dice_plots()
 #levenshtein_plots()
+ml_tagged_plots()

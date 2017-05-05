@@ -155,13 +155,23 @@ fn eval_parses(testsents: &Vec<String>, testtrees: &Vec<PTBTree>, parses: Vec<Ha
     
     for line in String::from_utf8(Command::new("../EVALB/evalb").arg(&gold_path).arg(best_path).output().unwrap().stdout).unwrap().lines() {
         if line.starts_with("Bracketing FMeasure") {
-            stats.fmeasure = line.split('=').nth(1).unwrap().trim().parse().unwrap();
+            let val = line.split('=')
+                          .nth(1)
+                          .expect("Bracketing FMeasure not followed by '='")
+                          .trim();
+            stats.fmeasure = val.parse()
+                                .expect(&format!("Bracketing FMeasure = {} <- no number :(", val));
             break
         }
     }
     for line in String::from_utf8(Command::new("../EVALB/evalb").arg(&gold_path).arg(best_or_fail_path).output().unwrap().stdout).unwrap().lines() {
         if line.starts_with("Bracketing FMeasure") {
-            stats.or_fail_fmeasure = line.split('=').nth(1).unwrap().trim().parse().unwrap();
+            let val = line.split('=')
+                          .nth(1)
+                          .expect("Bracketing FMeasure not followed by '='")
+                          .trim();
+            stats.or_fail_fmeasure = val.parse()
+                                        .expect(&format!("Bracketing FMeasure = {} <- no number :(", val));
             break
         }
     }
