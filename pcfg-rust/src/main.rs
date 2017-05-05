@@ -196,6 +196,8 @@ fn main() {
     };
     
     let mut wsj_path: String = "/home/sjm/documents/Uni/FuzzySP/treebank-3_LDC99T42/treebank_3/parsed/mrg/wsj".to_string();
+//    let mut spmrl_path: String = "/home/sjm/documents/Uni/FuzzySP/spmrl-2014/data/GERMAN_SPMRL/gold/ptb".to_string();
+    let mut spmrl_path: String = "".to_string();
     
     { // this block limits scope of borrows by ap.refer() method
         let mut ap = ArgumentParser::new();
@@ -245,22 +247,18 @@ fn main() {
         ap.refer(&mut wsj_path)
             .add_option(&["--wsjpath"], Store,
             "Path of WSL merged data (.../treebank_3/parsed/mrg/wsj)");
+        ap.refer(&mut spmrl_path)
+            .add_option(&["--spmrlpath"], Store,
+            "Path of SPMRL data (.../GERMAN_SPMRL/gold/ptb)");
         ap.parse_args_or_exit();
     }
     
-    //println!("Now loading and processing all PTB stuff!");
+    //println!("Now loading and processing all data!");
     let t = get_usertime();
-    let (unb_rules, unb_ntdict) = extract::ptb_train(&wsj_path, &mut stats);
-    let (bin_rules, bin_ntdict) = extract::binarize_grammar(&unb_rules, &unb_ntdict);
-    let (testsents, testposs, testtrees) = extract::ptb_test(&wsj_path, &stats);
+    let ((bin_rules, bin_ntdict), (testsents, testposs, testtrees)) = extract::get_data(&wsj_path, &spmrl_path, &mut stats);
     stats.gram_ext_bin = get_usertime() - t;
-    stats.unbin_nts = unb_ntdict.len();
-    stats.bin_nts   = bin_ntdict.len();
     
     //println!("Now parsing!");
-    let testposs = extract::read_testtagsfile(&stats.testtagsfile, testposs, stats.testmaxlen);
-    
-    let mut s = stats.clone();
-    let parses = parse::agenda_cky_parse(&bin_rules, &bin_ntdict, &testsents, &testposs, &mut s);
-    eval_parses(&testsents, &testtrees, parses.clone(), &bin_ntdict, &mut s);
+    let parses = parse::agenda_cky_parse(&bin_rules, &bin_ntdict, &testsents, &testposs, &mut stats);
+    eval_parses(&testsents, &testtrees, parses, &bin_ntdict, &mut stats);
 }

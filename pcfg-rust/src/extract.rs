@@ -98,9 +98,7 @@ pub fn binarize_grammar(in_rules: &HashMap<NT, HashMap<RHS, f64>>, ntdict: &Hash
     (bin_rules, reverse_bijection(&rev_ntdict))
 }
 
-pub fn ptb_train(wsj_path: &str, stats: &mut PCFGParsingStatistics) -> (HashMap<NT, HashMap<RHS, f64>>, HashMap<NT, String>) {
-    let mut train_trees = ptb_reader::parse_ptb_sections(wsj_path, (2..22).collect()); // sections 2-21
-    //println!("Read in a total of {} trees, but limiting them to trainsize = {} trees.", train_trees.len(), stats.trainsize);
+pub fn crunch_train_trees(mut train_trees: Vec<PTBTree>, stats: &PCFGParsingStatistics) -> (HashMap<NT, HashMap<RHS, f64>>, HashMap<NT, String>) {
     
     assert!(train_trees.len() >= stats.trainsize);
     
@@ -156,10 +154,7 @@ pub fn ptb_train(wsj_path: &str, stats: &mut PCFGParsingStatistics) -> (HashMap<
     (lhs_to_rhs_prob, reverse_bijection(&rev_ntdict))
 }
 
-pub fn ptb_test(wsj_path: &str, stats: &PCFGParsingStatistics) -> (Vec<String>, Vec<String>, Vec<PTBTree>) {
-    //println!("Reading, stripping and yielding test sentences...");
-    let read_devtrees = ptb_reader::parse_ptb_sections(wsj_path, vec![22]);
-    
+pub fn crunch_test_trees(read_devtrees: Vec<PTBTree>, stats: &PCFGParsingStatistics) -> (Vec<String>, Vec<String>, Vec<PTBTree>) {
     let mut devsents: Vec<String> = Vec::new();
     let mut devposs: Vec<String> = Vec::new();
     let mut devtrees: Vec<PTBTree> = Vec::new();
@@ -218,4 +213,31 @@ pub fn read_testtagsfile(filename: &str, golddata: Vec<String>, testmaxlen: usiz
                           .collect::<Vec<Vec<(POSTag, f64)>>>())
         .collect::<Vec<Vec<Vec<(POSTag, f64)>>>>()
     }
+}
+
+pub fn get_data(wsj_path: &str, spmrl_path: &str, stats: &mut PCFGParsingStatistics)
+        -> ((HashMap<NT, HashMap<RHS, f64>>, HashMap<NT, String>), (Vec<String>, Vec<Vec<Vec<(POSTag, f64)>>>, Vec<PTBTree>))  {
+    
+    let train_trees = match (wsj_path, spmrl_path) {
+        ("", _) => ptb_reader::parse_spmrl_ptb_file(&(spmrl_path.to_string() + "/train/train.German.gold.ptb")).unwrap(),
+        (_, "") => ptb_reader::parse_ptb_sections(wsj_path, (2..22).collect()), // sections 2-21
+        _ => unreachable!()
+    };
+    let test_trees = match (wsj_path, spmrl_path) {
+        ("", _) => ptb_reader::parse_spmrl_ptb_file(&(spmrl_path.to_string() + "/dev/dev.German.gold.ptb")).unwrap(),
+        (_, "") => ptb_reader::parse_ptb_sections(wsj_path, vec![22]), // section 22
+        _ => unreachable!()
+    };
+    
+    let (unb_rules, unb_ntdict) = crunch_train_trees(train_trees, &stats);
+    let (testsents, testposs, testtrees) = crunch_test_trees(test_trees, &stats);
+    
+    let testposs = read_testtagsfile(&stats.testtagsfile, testposs, stats.testmaxlen);
+    
+    let (bin_rules, bin_ntdict) = binarize_grammar(&unb_rules, &unb_ntdict);
+    
+    stats.unbin_nts = unb_ntdict.len();
+    stats.bin_nts   = bin_ntdict.len();
+    
+    ((bin_rules, bin_ntdict), (testsents, testposs, testtrees))
 }
