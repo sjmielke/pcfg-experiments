@@ -45,17 +45,20 @@ impl<'a> ParseTree<'a> {
 pub enum OOVHandling {
     /// Fail on every OOV (standard, fastest)
     Zero,
-    /// Accept every POS tag with e^{-300} probability
+    /// Accept every POS tag with `1.0 * oovuniformprob` "probability"
     Uniform,
-    /// Accept every POS tag with (c_POS/sum_POS' c_POS') * e^{-300} probability
-    Marginal
+    /// Accept every POS tag with `(c_POS/sum_POS' c_POS') * oovuniformprob` "probability"
+    MarginalAll,
+    /// Accept every POS tag with `(c_rare_POS/sum_rare_POS' c_rare_POS') * oovuniformprob` "probability" (where rare is defined as belonging to a word that appears less or equal to 3 times)
+    MarginalLe3
 }
 impl ::std::fmt::Display for OOVHandling {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
         match *self {
             OOVHandling::Zero => write!(f, "zero"),
             OOVHandling::Uniform => write!(f, "uniform"),
-            OOVHandling::Marginal => write!(f, "marginal")
+            OOVHandling::MarginalAll => write!(f, "marginal-all"),
+            OOVHandling::MarginalLe3 => write!(f, "marginal-le3")
         }
     }
 }
@@ -66,7 +69,8 @@ impl ::std::str::FromStr for OOVHandling {
         match s {
             "zero" => Ok(OOVHandling::Zero),
             "uniform" => Ok(OOVHandling::Uniform),
-            "marginal" => Ok(OOVHandling::Marginal),
+            "marginal-all" => Ok(OOVHandling::MarginalAll),
+            "marginal-le3" => Ok(OOVHandling::MarginalLe3),
             _ => Err(format!("Invalid OOV handling parameter »{}«", s))
         }
     }

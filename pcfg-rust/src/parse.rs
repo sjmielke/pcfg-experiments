@@ -145,7 +145,7 @@ fn hashmap_to_vec<V: Default>(hm: HashMap<usize, V>) -> Vec<V> {
     mapvec
 }
 
-pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_ntdict: &HashMap<NT, String>, sents: &'a [String], poss: &'a Vec<Vec<Vec<(POSTag, f64)>>>, stats: &mut PCFGParsingStatistics) -> Vec<HashMap<NT, (f64, ParseTree<'a>)>> {
+pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_ntdict: &HashMap<NT, String>, sents: &'a [String], poss: &'a Vec<Vec<Vec<(POSTag, f64)>>>, pret_distr_all: HashMap<NT, f64>, pret_distr_le3: HashMap<NT, f64>, stats: &mut PCFGParsingStatistics) -> Vec<HashMap<NT, (f64, ParseTree<'a>)>> {
     // Build helper dicts for quick access. All are bottom-up in the parse.
     let t = get_usertime();
     let ntcount = bin_rules.len();
@@ -366,7 +366,26 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_n
                             }
                         }
                     },
-                    OOVHandling::Marginal => panic!("Unimplemented")
+                    OOVHandling::MarginalAll => {
+                        for (nt, p) in &pret_distr_all {
+                            let addr = chart_adr(sentlen, ntcount, i, i + 1, *nt);
+                            let logprob = p.ln() + uniform_oov_prob;
+                            if logprob > ckychart[addr].0 { // for all_terms_fallback that should be checked
+                                ckychart[addr].0 = logprob;
+                                agenda.push(AgendaItem(logprob, i, i+1, *nt))
+                            }
+                        }
+                    }
+                    OOVHandling::MarginalLe3 => {
+                        for (nt, p) in &pret_distr_le3 {
+                            let addr = chart_adr(sentlen, ntcount, i, i + 1, *nt);
+                            let logprob = p.ln() + uniform_oov_prob;
+                            if logprob > ckychart[addr].0 { // for all_terms_fallback that should be checked
+                                ckychart[addr].0 = logprob;
+                                agenda.push(AgendaItem(logprob, i, i+1, *nt))
+                            }
+                        }
+                    }
                 }
             }
         }

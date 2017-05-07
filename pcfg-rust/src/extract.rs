@@ -98,7 +98,7 @@ pub fn binarize_grammar(in_rules: &HashMap<NT, HashMap<RHS, f64>>, ntdict: &Hash
     (bin_rules, reverse_bijection(&rev_ntdict))
 }
 
-pub fn crunch_train_trees(mut train_trees: Vec<PTBTree>, stats: &PCFGParsingStatistics) -> (HashMap<NT, HashMap<RHS, f64>>, HashMap<NT, String>, Vec<NT>) {
+pub fn crunch_train_trees(mut train_trees: Vec<PTBTree>, stats: &PCFGParsingStatistics) -> (HashMap<NT, HashMap<RHS, f64>>, HashMap<NT, String>, Vec<NT>, HashMap<NT, f64>, HashMap<NT, f64>) {
     
     assert!(train_trees.len() >= stats.trainsize);
     
@@ -147,6 +147,56 @@ pub fn crunch_train_trees(mut train_trees: Vec<PTBTree>, stats: &PCFGParsingStat
     // Normalize grammar
     let mut lhs_to_rhs_prob: HashMap<NT, HashMap<RHS, f64>> = HashMap::new();
     
+    // First: what are the rare words?
+    let mut word_counter: HashMap<String, usize> = HashMap::new();
+    for (_, rhsmap) in &lhs_to_rhs_count {
+        for (rhs, count) in rhsmap {
+            if let RHS::Terminal(ref w) = *rhs {
+                let c = word_counter.entry(w.clone()).or_insert(0);
+                *c = *c + count;
+            }
+        }
+    }
+    
+    // Construct better baselines
+    let mut pret_counter_all: HashMap<NT, usize> = HashMap::new();
+    let mut pret_counter_le3: HashMap<NT, usize> = HashMap::new();
+    let mut wc_all: usize = 0;
+    let mut wc_le3: usize = 0;
+    for (lhs, rhsmap) in &lhs_to_rhs_count {
+        // Make sure there's an entry so we get it in the final distribution!
+        // Also, note that we do +1 smoothing to allow everything :)
+        pret_counter_all.entry(*lhs).or_insert(1);
+        pret_counter_le3.entry(*lhs).or_insert(1);
+        for (rhs, count) in rhsmap {
+            if let RHS::Terminal(ref w) = *rhs {
+                let c = pret_counter_all.get_mut(lhs).unwrap();
+                *c = *c + *count;
+                wc_all += *count;
+                if *word_counter.get(w).unwrap() <= 3 {
+                    let c = pret_counter_le3.get_mut(lhs).unwrap();
+                    *c = *c + *count;
+                    wc_le3 += *count;
+                }
+            }
+        }
+    }
+    
+    // Normalize these distributions
+    let pret_distr_all: HashMap<NT, f64> = pret_counter_all.into_iter().map(|(nt, c)| (nt, (c as f64) / (wc_all as f64))).collect();
+    let pret_distr_le3: HashMap<NT, f64> = pret_counter_le3.into_iter().map(|(nt, c)| (nt, (c as f64) / (wc_le3 as f64))).collect();
+    
+    // {
+    //     let ntdict = reverse_bijection(&rev_ntdict);
+    //     let mut v = pret_distr_all.iter().collect::<Vec<_>>();
+    //     v.sort_by_key(|&(_,b)| (b * 100000000.0) as usize);
+    //     println!("{:?}\n\n", v.into_iter().map(|(a,b)| (ntdict.get(a).unwrap(),b)).collect::<Vec<_>>());
+    //     let mut v = pret_distr_le3.iter().collect::<Vec<_>>();
+    //     v.sort_by_key(|&(_,b)| (b * 100000000.0) as usize);
+    //     println!("{:?}", v.into_iter().map(|(a,b)| (ntdict.get(a).unwrap(),b)).collect::<Vec<_>>());
+    // }
+    
+    // ... and finally normalize rule set!
     for (lhs, rhsmap) in lhs_to_rhs_count {
         let mut innermap = HashMap::new();
         let z: usize = rhsmap.values().sum();
@@ -157,7 +207,7 @@ pub fn crunch_train_trees(mut train_trees: Vec<PTBTree>, stats: &PCFGParsingStat
         lhs_to_rhs_prob.insert(lhs, innermap);
     }
     
-    (lhs_to_rhs_prob, reverse_bijection(&rev_ntdict), initial_nts.into_iter().collect::<Vec<usize>>())
+    (lhs_to_rhs_prob, reverse_bijection(&rev_ntdict), initial_nts.into_iter().collect::<Vec<usize>>(), pret_distr_all, pret_distr_le3)
 }
 
 pub fn crunch_test_trees(read_devtrees: Vec<PTBTree>, stats: &PCFGParsingStatistics) -> (Vec<String>, Vec<String>, Vec<PTBTree>) {
@@ -225,7 +275,7 @@ pub fn read_testtagsfile(filename: &str, golddata: Vec<String>, testmaxlen: Opti
 }
 
 pub fn get_data(wsj_path: &str, spmrl_path: &str, stats: &mut PCFGParsingStatistics)
-        -> ((HashMap<NT, HashMap<RHS, f64>>, HashMap<NT, String>), Vec<NT>, (Vec<String>, Vec<Vec<Vec<(POSTag, f64)>>>, Vec<PTBTree>))  {
+        -> ((HashMap<NT, HashMap<RHS, f64>>, HashMap<NT, String>), Vec<NT>, HashMap<NT, f64>, HashMap<NT, f64>, (Vec<String>, Vec<Vec<Vec<(POSTag, f64)>>>, Vec<PTBTree>))  {
     
     fn read_caseinsensitive(prefix: &String, camellang: &String, stats: &PCFGParsingStatistics, bracketing: bool) -> Result<Vec<PTBTree>, Box<::std::error::Error>> {
         let name1 = prefix.to_string() + &camellang + ".gold.ptb";
@@ -262,7 +312,7 @@ pub fn get_data(wsj_path: &str, spmrl_path: &str, stats: &mut PCFGParsingStatist
         (train, read_bracketinginsensitive(&testfile_prefix, &camellang, stats).expect(&format!("Didn't find {} dev!", lang)))
     };
     
-    let (unb_rules, unb_ntdict, initial_nts) = crunch_train_trees(train_trees, &stats);
+    let (unb_rules, unb_ntdict, initial_nts, pret_distr_all, pret_distr_le3) = crunch_train_trees(train_trees, &stats);
     let (mut testsents, gold_testposs, mut testtrees) = crunch_test_trees(test_trees, &stats);
     
     let maxlen = if lang == "ENGLISH" {Some(40)} else {None};
@@ -296,5 +346,5 @@ pub fn get_data(wsj_path: &str, spmrl_path: &str, stats: &mut PCFGParsingStatist
     stats.unbin_nts = unb_ntdict.len();
     stats.bin_nts   = bin_ntdict.len();
     
-    ((bin_rules, bin_ntdict), initial_nts, (testsents, testposs, testtrees))
+    ((bin_rules, bin_ntdict), initial_nts, pret_distr_all, pret_distr_le3, (testsents, testposs, testtrees))
 }
