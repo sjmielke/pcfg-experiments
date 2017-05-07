@@ -5,6 +5,7 @@ use std::process::Command;
 extern crate tempdir;
 use std::fs::File;
 use std::io::Write;
+use std::io::prelude::*;
 use tempdir::TempDir;
 
 // Caching for feature structures
@@ -153,7 +154,12 @@ fn eval_parses(testsents: &Vec<String>, testtrees: &Vec<PTBTree>, parses: Vec<Ha
         writeln!(best_or_fail_file, "{}", best_or_fail_parse).unwrap();
     }
     
-    for line in String::from_utf8(Command::new("../EVALB/evalb").arg(&gold_path).arg(best_path).output().unwrap().stdout).unwrap().lines() {
+    let evalb_run = Command::new("../EVALB/evalb").arg(&gold_path).arg(best_path).output();
+    println!("ran first");
+    let _ = std::io::stdin().read(&mut [0u8]).unwrap();
+    let s = String::from_utf8(evalb_run.unwrap().stdout);
+    println!("called fromutf8");
+    for line in s.unwrap().lines() {
         if line.starts_with("Bracketing FMeasure") {
             let val = line.split('=')
                           .nth(1)
@@ -164,6 +170,7 @@ fn eval_parses(testsents: &Vec<String>, testtrees: &Vec<PTBTree>, parses: Vec<Ha
             break
         }
     }
+    println!("got first");
     for line in String::from_utf8(Command::new("../EVALB/evalb").arg(&gold_path).arg(best_or_fail_path).output().unwrap().stdout).unwrap().lines() {
         if line.starts_with("Bracketing FMeasure") {
             let val = line.split('=')
@@ -175,8 +182,10 @@ fn eval_parses(testsents: &Vec<String>, testtrees: &Vec<PTBTree>, parses: Vec<Ha
             break
         }
     }
+    println!("got second");
     
     stats.print(false);
+    println!("{}", testsents.len());
     
     // safely close to get error messages just in case
     drop(gold_file);
@@ -191,8 +200,6 @@ fn main() {
         // Values
         language: "english".to_string(),
         trainsize: 7500,
-        testsize: 500,
-        testmaxlen: 40,
         oov_handling: OOVHandling::Zero,
         feature_structures: "exactmatch".to_string(),
         testtagsfile: "".to_string(),
@@ -216,12 +223,6 @@ fn main() {
         ap.refer(&mut stats.trainsize)
             .add_option(&["--trainsize"], Store,
             "Number of training sentences from sections 2-21");
-        ap.refer(&mut stats.testsize)
-            .add_option(&["--testsize"], Store,
-            "Number of test sentences from section 22");
-        ap.refer(&mut stats.testmaxlen)
-            .add_option(&["--testmaxlen"], Store,
-            "Maximum length of each test sentence (words)");
         ap.refer(&mut stats.oov_handling)
             .add_option(&["--oovhandling"], Store,
             "OOV->POS handling: Zero (default), Uniform or Marginal");

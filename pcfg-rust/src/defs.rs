@@ -79,8 +79,6 @@ pub struct PCFGParsingStatistics {
     pub language: String,
     // Raw numbers
     pub trainsize: usize,
-    pub testsize: usize,
-    pub testmaxlen: usize,
     pub oov_handling: OOVHandling,
     pub all_terms_fallback: bool,
     pub exhaustive: bool,
@@ -112,12 +110,10 @@ pub struct PCFGParsingStatistics {
 impl PCFGParsingStatistics {
     pub fn print(&self, head: bool) {
         if head {
-            println!("language\ttrainsize\ttestsize\ttestmaxlen\tunbin_nts\tbin_nts\toov_handling\tuniform_oov_prob\tfeature_structures\ttesttagsfile\tnbesttags\tnoafterdash\teta\talpha\tbeta\tkappa\tall_terms_fallback\texhaustive\tgram_ext_bin\tcky_prep\tcky_terms\tcky_higher\toov_words\toov_sents\tparsefails\tfmeasure\tfmeasure (fail ok)");
+            println!("language\ttrainsize\tunbin_nts\tbin_nts\toov_handling\tuniform_oov_prob\tfeature_structures\ttesttagsfile\tnbesttags\tnoafterdash\teta\talpha\tbeta\tkappa\tall_terms_fallback\texhaustive\tgram_ext_bin\tcky_prep\tcky_terms\tcky_higher\toov_words\toov_sents\tparsefails\tfmeasure\tfmeasure (fail ok)");
         }
         print!("{}\t", self.language);
         print!("{}\t", self.trainsize);
-        print!("{}\t", self.testsize);
-        print!("{}\t", self.testmaxlen);
         print!("{}\t", self.unbin_nts);
         print!("{}\t", self.bin_nts);
         print!("{}\t", self.oov_handling);

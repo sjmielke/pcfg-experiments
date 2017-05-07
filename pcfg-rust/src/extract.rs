@@ -160,13 +160,12 @@ pub fn crunch_test_trees(read_devtrees: Vec<PTBTree>, stats: &PCFGParsingStatist
     let mut devtrees: Vec<PTBTree> = Vec::new();
     for mut t in read_devtrees {
         t.strip_all_predicate_annotations();
-        if t.front_length() <= stats.testmaxlen && devtrees.len() < stats.testsize {
+        if stats.language.to_uppercase() != "ENGLISH" || t.front_length() <= 40 {
             devsents.push(t.front());
             devposs.push(t.pos_front());
             devtrees.push(t);
         }
     }
-    assert_eq!(devtrees.len(), stats.testsize);
     //println!("From {} candidates we took {} dev sentences (max length {})!", read_devtrees.len(), devtrees.len(), stats.testmaxlen);
     
     (devsents, devposs, devtrees)
@@ -176,7 +175,7 @@ pub fn crunch_test_trees(read_devtrees: Vec<PTBTree>, stats: &PCFGParsingStatist
 /// Assumes space separated tag descriptors:
 /// * 1-best: simply the tag.
 /// * n-best: class1/logprob1;c2/l2;...
-pub fn read_testtagsfile(filename: &str, golddata: Vec<String>, testmaxlen: usize) -> Vec<Vec<Vec<(POSTag, f64)>>> {
+pub fn read_testtagsfile(filename: &str, golddata: Vec<String>, testmaxlen: Option<usize>) -> Vec<Vec<Vec<(POSTag, f64)>>> {
     fn decode_td(td: &str) -> Vec<(POSTag, f64)> {
         let mut ress: Vec<(POSTag, f64)> = Vec::new();
         for cd in td.split(';') {
@@ -197,15 +196,19 @@ pub fn read_testtagsfile(filename: &str, golddata: Vec<String>, testmaxlen: usiz
             .expect("no pos file :(")
             .read_to_string(&mut contents)
             .expect("unreadable pos file :(");
-        contents.split("\n")
+        let poss = contents.split("\n")
             .collect::<Vec<&str>>()
             .into_iter()
             .filter(|s| *s != "")
             .map(|s| s.split(' ')
                       .map(decode_td)
                       .collect::<Vec<Vec<(POSTag, f64)>>>())
-            .filter(|v| v.len() <= testmaxlen)
-            .collect::<Vec<Vec<Vec<(POSTag, f64)>>>>()
+            .collect::<Vec<Vec<Vec<(POSTag, f64)>>>>();
+        
+        match testmaxlen {
+            Some(mln) => poss.into_iter().filter(|v| v.len() <= mln).collect(),
+            None => poss
+        }
     } else {
         golddata.iter()
                 .map(|s| s.split(' ')
@@ -218,28 +221,70 @@ pub fn read_testtagsfile(filename: &str, golddata: Vec<String>, testmaxlen: usiz
 pub fn get_data(wsj_path: &str, spmrl_path: &str, stats: &mut PCFGParsingStatistics)
         -> ((HashMap<NT, HashMap<RHS, f64>>, HashMap<NT, String>), (Vec<String>, Vec<Vec<Vec<(POSTag, f64)>>>, Vec<PTBTree>))  {
     
+    
+    fn read_caseinsensitive(prefix: &String, camellang: &String, stats: &PCFGParsingStatistics, bracketing: bool) -> Result<Vec<PTBTree>, Box<::std::error::Error>> {
+        let name1 = prefix.to_string() + &camellang + ".gold.ptb";
+        let name2 = prefix.to_string() + &camellang.to_lowercase() + ".gold.ptb";
+        match ptb_reader::parse_spmrl_ptb_file(&name1, bracketing, stats.noafterdash) {
+            t@Ok(_) => t,
+            Err(_) => ptb_reader::parse_spmrl_ptb_file(&name2, bracketing, stats.noafterdash)
+        }
+    }
+    
+    fn read_bracketinginsensitive(prefix: &String, camellang: &String, stats: &PCFGParsingStatistics) -> Result<Vec<PTBTree>, Box<::std::error::Error>> {
+        match read_caseinsensitive(prefix, camellang, stats, false) {
+            t@Ok(_) => t,
+            Err(_) => read_caseinsensitive(prefix, camellang, stats, true)
+        }
+    }
     let lang = stats.language.to_uppercase();
     
     let (train_trees, test_trees) = if lang == "ENGLISH" {
-        (ptb_reader::parse_ptb_sections(wsj_path, (2..22).collect()), // sections 2-21
-         ptb_reader::parse_ptb_sections(wsj_path, vec![22])) // section 22)
+        let train = ptb_reader::parse_ptb_sections(wsj_path, (2..22).collect()); // sections 2-21
+        let  test = ptb_reader::parse_ptb_sections(wsj_path, vec![22]); // section 22
+        (train, test)
     } else {
         let mut camellang = lang.chars().next().unwrap().to_string();
         camellang += &lang.to_lowercase()[1..];
-        let alltrain_name = spmrl_path.to_string() + "/" + &lang + "_SPMRL/gold/ptb/train/train." + &camellang + ".gold.ptb";
-        let train_5k_name = spmrl_path.to_string() + "/" + &lang + "_SPMRL/gold/ptb/train5k/train5k." + &camellang + ".gold.ptb";
-        let testfile_name = spmrl_path.to_string() + "/" + &lang + "_SPMRL/gold/ptb/dev/dev." + &camellang + ".gold.ptb";
-        let train = match ptb_reader::parse_spmrl_ptb_file(&alltrain_name, stats.noafterdash) {
-            Some(t) => t,
-            None => ptb_reader::parse_spmrl_ptb_file(&train_5k_name, stats.noafterdash).expect(&format!("Found neither {} nor {}!", alltrain_name, train_5k_name))
+        let alltrain_prefix = spmrl_path.to_string() + "/" + &lang + "_SPMRL/gold/ptb/train/train.";
+        let train_5k_prefix = spmrl_path.to_string() + "/" + &lang + "_SPMRL/gold/ptb/train5k/train5k.";
+        let testfile_prefix = spmrl_path.to_string() + "/" + &lang + "_SPMRL/gold/ptb/dev/dev.";
+        
+        let train = match read_bracketinginsensitive(&alltrain_prefix, &camellang, stats) {
+            Ok(t) => t,
+            Err(_) => read_bracketinginsensitive(&train_5k_prefix, &camellang, stats).expect(&format!("Din't find {} train!", lang))
         };
-        (train, ptb_reader::parse_spmrl_ptb_file(&testfile_name, stats.noafterdash).expect(&format!("Didn't find {}!", testfile_name)))
+        (train, read_bracketinginsensitive(&testfile_prefix, &camellang, stats).expect(&format!("Didn't find {} dev!", lang)))
     };
     
     let (unb_rules, unb_ntdict) = crunch_train_trees(train_trees, &stats);
-    let (testsents, testposs, testtrees) = crunch_test_trees(test_trees, &stats);
+    let (mut testsents, gold_testposs, mut testtrees) = crunch_test_trees(test_trees, &stats);
     
-    let testposs = read_testtagsfile(&stats.testtagsfile, testposs, stats.testmaxlen);
+    let maxlen = if lang == "ENGLISH" {Some(40)} else {None};
+    let mut testposs = read_testtagsfile(&stats.testtagsfile, gold_testposs, maxlen);
+    
+    if lang == "ENGLISH" {
+        testsents.truncate(500);
+        testposs.truncate(500);
+        testtrees.truncate(500)
+    }
+    
+    let intended_ts_len = match lang.as_ref() {
+        "ENGLISH" => 500,
+        "GERMAN" => 5000,
+        "KOREAN" => 2066,
+        "ARABIC" => 1985,
+        "FRENCH" => 1235,
+        "HUNGARIAN" => 1051,
+        "BASQUE" => 948,
+        "POLISH" => 821,
+        "HEBREW" => 500,
+        "SWEDISH" => 494,
+        _ => unreachable!()
+    };
+    assert_eq!(testsents.len(), intended_ts_len);
+    assert_eq!(testposs.len(), intended_ts_len);
+    assert_eq!(testtrees.len(), intended_ts_len);
     
     let (bin_rules, bin_ntdict) = binarize_grammar(&unb_rules, &unb_ntdict);
     

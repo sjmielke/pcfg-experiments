@@ -4,15 +4,15 @@ version = "0.1.0"
 authors = ["Sebastian J. Mielke <sjm@sjmielke.com>"]
 
 [dependencies]
-ptb-reader = "0.8.0"
+#ptb-reader = "0.8.0"
 tempdir = "0.3.5"
 argparse = "0.2.1"
 libc = "*"
 lazy_static = "*"
 strsim = "*"
 
-#[dependencies.ptb-reader]
-#path = "/home/sjm/programming/ptb-reader-rust/"
+[dependencies.ptb-reader]
+path = "/home/sjm/programming/ptb-reader-rust/"
 
 [profile.release]
 debug = true
