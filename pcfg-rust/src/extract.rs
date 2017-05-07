@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap,HashSet};
 use std::fs::File;
 use std::io::prelude::*;
 
@@ -98,17 +98,23 @@ pub fn binarize_grammar(in_rules: &HashMap<NT, HashMap<RHS, f64>>, ntdict: &Hash
     (bin_rules, reverse_bijection(&rev_ntdict))
 }
 
-pub fn crunch_train_trees(mut train_trees: Vec<PTBTree>, stats: &PCFGParsingStatistics) -> (HashMap<NT, HashMap<RHS, f64>>, HashMap<NT, String>) {
+pub fn crunch_train_trees(mut train_trees: Vec<PTBTree>, stats: &PCFGParsingStatistics) -> (HashMap<NT, HashMap<RHS, f64>>, HashMap<NT, String>, Vec<NT>) {
     
     assert!(train_trees.len() >= stats.trainsize);
     
     let mut lhs_to_rhs_count: HashMap<NT, HashMap<RHS, usize>> = HashMap::new();
     let mut rev_ntdict: HashMap<String, NT> = HashMap::new();
+    let mut initial_nts: HashSet<NT> = HashSet::new();
     
-    fn readoff_rules_into(t: &PTBTree, lhs_to_rhs_count: &mut HashMap<NT, HashMap<RHS, usize>>, rev_ntdict: &mut HashMap<String, NT>) {
+    fn readoff_rules_into(t: &PTBTree, lhs_to_rhs_count: &mut HashMap<NT, HashMap<RHS, usize>>, rev_ntdict: &mut HashMap<String, NT>, o_initial_nts: Option<&mut HashSet<NT>>) {
         match *t {
             PTBTree::InnerNode { ref label, ref children } => {
                 let lhs = treat_nt(rev_ntdict, label);
+                
+                if let Some(mut initial_nts) = o_initial_nts {
+                    initial_nts.insert(lhs);
+                }
+                
                 // Terminal case maybe?
                 if children.len() == 1 {
                     if let PTBTree::TerminalNode { ref label } = children[0] {
@@ -123,7 +129,7 @@ pub fn crunch_train_trees(mut train_trees: Vec<PTBTree>, stats: &PCFGParsingStat
                         PTBTree::InnerNode { ref label, .. } | PTBTree::TerminalNode { ref label } => label
                     };
                     child_ids.push(treat_nt(rev_ntdict, s));
-                    readoff_rules_into(c, lhs_to_rhs_count, rev_ntdict);
+                    readoff_rules_into(c, lhs_to_rhs_count, rev_ntdict, None);
                 }
                 incr_in_innermap(lhs, RHS::NTs(child_ids), lhs_to_rhs_count);
             }
@@ -135,7 +141,7 @@ pub fn crunch_train_trees(mut train_trees: Vec<PTBTree>, stats: &PCFGParsingStat
     
     for ref mut t in &mut train_trees[0..stats.trainsize] {
         t.strip_all_predicate_annotations();
-        readoff_rules_into(t, &mut lhs_to_rhs_count, &mut rev_ntdict);
+        readoff_rules_into(t, &mut lhs_to_rhs_count, &mut rev_ntdict, Some(&mut initial_nts));
     }
     
     // Normalize grammar
@@ -151,7 +157,7 @@ pub fn crunch_train_trees(mut train_trees: Vec<PTBTree>, stats: &PCFGParsingStat
         lhs_to_rhs_prob.insert(lhs, innermap);
     }
     
-    (lhs_to_rhs_prob, reverse_bijection(&rev_ntdict))
+    (lhs_to_rhs_prob, reverse_bijection(&rev_ntdict), initial_nts.into_iter().collect::<Vec<usize>>())
 }
 
 pub fn crunch_test_trees(read_devtrees: Vec<PTBTree>, stats: &PCFGParsingStatistics) -> (Vec<String>, Vec<String>, Vec<PTBTree>) {
@@ -219,8 +225,7 @@ pub fn read_testtagsfile(filename: &str, golddata: Vec<String>, testmaxlen: Opti
 }
 
 pub fn get_data(wsj_path: &str, spmrl_path: &str, stats: &mut PCFGParsingStatistics)
-        -> ((HashMap<NT, HashMap<RHS, f64>>, HashMap<NT, String>), (Vec<String>, Vec<Vec<Vec<(POSTag, f64)>>>, Vec<PTBTree>))  {
-    
+        -> ((HashMap<NT, HashMap<RHS, f64>>, HashMap<NT, String>), Vec<NT>, (Vec<String>, Vec<Vec<Vec<(POSTag, f64)>>>, Vec<PTBTree>))  {
     
     fn read_caseinsensitive(prefix: &String, camellang: &String, stats: &PCFGParsingStatistics, bracketing: bool) -> Result<Vec<PTBTree>, Box<::std::error::Error>> {
         let name1 = prefix.to_string() + &camellang + ".gold.ptb";
@@ -257,7 +262,7 @@ pub fn get_data(wsj_path: &str, spmrl_path: &str, stats: &mut PCFGParsingStatist
         (train, read_bracketinginsensitive(&testfile_prefix, &camellang, stats).expect(&format!("Didn't find {} dev!", lang)))
     };
     
-    let (unb_rules, unb_ntdict) = crunch_train_trees(train_trees, &stats);
+    let (unb_rules, unb_ntdict, initial_nts) = crunch_train_trees(train_trees, &stats);
     let (mut testsents, gold_testposs, mut testtrees) = crunch_test_trees(test_trees, &stats);
     
     let maxlen = if lang == "ENGLISH" {Some(40)} else {None};
@@ -291,5 +296,5 @@ pub fn get_data(wsj_path: &str, spmrl_path: &str, stats: &mut PCFGParsingStatist
     stats.unbin_nts = unb_ntdict.len();
     stats.bin_nts   = bin_ntdict.len();
     
-    ((bin_rules, bin_ntdict), (testsents, testposs, testtrees))
+    ((bin_rules, bin_ntdict), initial_nts, (testsents, testposs, testtrees))
 }
