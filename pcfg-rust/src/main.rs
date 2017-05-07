@@ -163,7 +163,6 @@ fn eval_parses(testsents: &Vec<String>, testtrees: &Vec<PTBTree>, parses: Vec<Ve
             break
         }
     }
-    println!("got first");
     for line in String::from_utf8(Command::new("../EVALB/evalb").arg(&gold_path).arg(best_or_fail_path).output().unwrap().stdout).unwrap().lines() {
         if line.starts_with("Bracketing FMeasure") {
             let val = line.split('=')
@@ -175,7 +174,6 @@ fn eval_parses(testsents: &Vec<String>, testtrees: &Vec<PTBTree>, parses: Vec<Ve
             break
         }
     }
-    println!("got second");
     
     stats.print(false);
     

@@ -187,6 +187,7 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_n
         // Kick it off with the terminals!
         let t = get_usertime();
         let uniform_oov_prob = stats.uniform_oov_prob;
+        // First do the good ones...
         match terminal_matcher {
             TerminalMatcher::ExactMatchOnly => {
                 for (i, w) in sent.iter().enumerate() {
@@ -197,30 +198,10 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_n
                                 ckychart[addr].0 = logprob;
                                 agenda.push(AgendaItem(logprob, i, i+1, nt))
                             }
-                            if stats.all_terms_fallback {
-                                for nt in &all_preterminals {
-                                    let addr = chart_adr(sentlen, ntcount, i, i + 1, *nt);
-                                    if ckychart[addr].0 == ::std::f64::NEG_INFINITY {
-                                        ckychart[addr].0 = uniform_oov_prob;
-                                        agenda.push(AgendaItem(uniform_oov_prob, i, i+1, *nt))
-                                    }
-                                }
-                            }
                         }
                         None => {
                             oov_in_this_sent = true;
                             stats.oov_words += 1;
-                            match stats.oov_handling {
-                                OOVHandling::Zero => (),
-                                OOVHandling::Uniform => {
-                                    for nt in &all_preterminals {
-                                        let addr = chart_adr(sentlen, ntcount, i, i + 1, *nt);
-                                        ckychart[addr].0 = uniform_oov_prob;
-                                        agenda.push(AgendaItem(uniform_oov_prob, i, i+1, *nt))
-                                    }
-                                },
-                                OOVHandling::Marginal => panic!("Unimplemented")
-                            }
                         }
                     }
                 }
@@ -361,6 +342,31 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_n
                             }
                         }
                     }
+                }
+            }
+        }
+        // ...then do the fallback.
+        for (i, _) in sent.iter().enumerate() {
+            let mut nothing_was_found = true;
+            for nt in &all_preterminals {
+                let addr = chart_adr(sentlen, ntcount, i, i + 1, *nt);
+                if ckychart[addr].0 != ::std::f64::NEG_INFINITY {
+                    nothing_was_found = false;
+                }
+            }
+            if nothing_was_found || stats.all_terms_fallback {
+                match stats.oov_handling {
+                    OOVHandling::Zero => (),
+                    OOVHandling::Uniform => {
+                        for nt in &all_preterminals {
+                            let addr = chart_adr(sentlen, ntcount, i, i + 1, *nt);
+                            if uniform_oov_prob > ckychart[addr].0 { // for all_terms_fallback that should be checked
+                                ckychart[addr].0 = uniform_oov_prob;
+                                agenda.push(AgendaItem(uniform_oov_prob, i, i+1, *nt))
+                            }
+                        }
+                    },
+                    OOVHandling::Marginal => panic!("Unimplemented")
                 }
             }
         }
