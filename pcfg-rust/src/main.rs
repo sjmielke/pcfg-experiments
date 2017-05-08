@@ -123,69 +123,58 @@ fn debinarize_and_sort_candidates<'a>(cell: &HashMap<NT, (f64, ParseTree<'a>)>, 
     candidates
 }
 
-fn eval_parses(testsents: &Vec<String>, testtrees: &Vec<PTBTree>, parses: Vec<Vec<(NT, (f64, PTBTree))>>, stats: &mut PCFGParsingStatistics) {
+fn eval_parses(testtrees: &Vec<PTBTree>, parses: Vec<Vec<(NT, (f64, PTBTree))>>, stats: &mut PCFGParsingStatistics) {
     // Save output for EVALB call
     let tmp_dir = TempDir::new("pcfg-rust").unwrap();
     let gold_path = tmp_dir.path().join("gold.txt");
-    let best_path = tmp_dir.path().join("best.txt");
     let best_or_fail_path = tmp_dir.path().join("best_or_fail.txt");
     let mut gold_file = File::create(&gold_path).unwrap();
-    let mut best_file = File::create(&best_path).unwrap();
     let mut best_or_fail_file = File::create(&best_or_fail_path).unwrap();
     
-    for ((sent, tree), candidates) in testsents.iter().zip(testtrees).zip(parses.iter()) {
+    for (gold_tree, candidates) in testtrees.iter().zip(parses.iter()) {
         //print_example(&bin_ntdict, &sent, &tree, &candidates);
         
-        let gold_parse: String = format!("{}", tree);
-        let best_parse: String = match candidates.get(0) {
-            None => "(( ".to_string() + &sent.replace(" ", ") ( ") + "))",
-            Some(&(_, (_, ref parsetree))) => format!("{}", parsetree)
-        };
+        let gold_parse: String = format!("{}", gold_tree);
         let best_or_fail_parse: String = match candidates.get(0) {
             None => "".to_string(),
             Some(&(_, (_, ref parsetree))) => format!("{}", parsetree)
         };
         
         writeln!(gold_file, "{}", gold_parse).unwrap();
-        writeln!(best_file, "{}", best_parse).unwrap();
         writeln!(best_or_fail_file, "{}", best_or_fail_parse).unwrap();
     }
     
-    //use std::io::prelude::*;
-    //let _ = std::io::stdin().read(&mut [0u8]).unwrap();
+    // use std::io::prelude::*;
+    // let _ = std::io::stdin().read(&mut [0u8]).unwrap();
     
-    for line in String::from_utf8(Command::new("../EVALB/evalb").arg(&gold_path).arg(best_path).output().unwrap().stdout).unwrap().lines() {
-        if line.starts_with("Bracketing FMeasure") {
-            let val = line.split('=')
-                          .nth(1)
-                          .expect("Bracketing FMeasure not followed by '='")
-                          .trim();
-            stats.fmeasure = val.parse()
-                                .expect(&format!("Bracketing FMeasure = {} <- no number :(", val));
-            break
-        }
+    let out_strict = Command::new("../evalb_spmrl2013.final/evalb_spmrl").arg("-L").arg("-X").arg(&gold_path).arg(&best_or_fail_path).output().unwrap().stdout;
+    let out_lenient = Command::new("../evalb_spmrl2013.final/evalb_spmrl").arg("-L").arg(&gold_path).arg(&best_or_fail_path).output().unwrap().stdout;
+    fn run_call(out: Vec<u8>) -> (f64, f64) {
+        let ress = String::from_utf8(out).unwrap().lines().last().unwrap().split('\t').map(|s| s.to_string()).collect::<Vec<String>>();
+        assert_eq!(ress.len(), 8);
+        let fmea = ress[0].split_whitespace().collect::<Vec<_>>();
+        assert_eq!(fmea[0], "F1:");
+        assert_eq!(fmea[2], "%");
+        let taga = ress[3].split_whitespace().collect::<Vec<_>>();
+        assert_eq!(taga[0], "POS:");
+        assert_eq!(taga[2], "%");
+        
+        (fmea[1].parse().expect(&format!("F1:  {} % <- no number :(", fmea[1])),
+         taga[1].parse().expect(&format!("POS:  {} % <- no number :(", taga[1])))
     }
-    for line in String::from_utf8(Command::new("../EVALB/evalb").arg(&gold_path).arg(best_or_fail_path).output().unwrap().stdout).unwrap().lines() {
-        if line.starts_with("Bracketing FMeasure") {
-            let val = line.split('=')
-                          .nth(1)
-                          .expect("Bracketing FMeasure not followed by '='")
-                          .trim();
-            stats.or_fail_fmeasure = val.parse()
-                                        .expect(&format!("Bracketing FMeasure = {} <- no number :(", val));
-            break
-        }
-    }
+    let strict = run_call(out_strict);
+    stats.fmeasure = strict.0;
+    stats.tagaccuracy = strict.1;
+    stats.or_fail_fmeasure = run_call(out_lenient).0;
     
     stats.print(false);
     
     // safely close to get error messages just in case
     drop(gold_file);
-    drop(best_file);
     tmp_dir.close().unwrap();
 }
 
-fn extract_and_parse(wsj_path: &str, spmrl_path: &str, mut stats: &mut PCFGParsingStatistics) -> (Vec<String>, Vec<PTBTree>, Vec<Vec<(NT, (f64, PTBTree))>>) {
+fn extract_and_parse(wsj_path: &str, spmrl_path: &str, mut stats: &mut PCFGParsingStatistics) -> (Vec<PTBTree>, Vec<Vec<(NT, (f64, PTBTree))>>) {
     //println!("Now loading and processing all data!");
     let t = get_usertime();
     let ((bin_rules, bin_ntdict), initial_nts, pret_distr_all, pret_distr_le3, (testsents, testposs, testtrees)) = extract::get_data(wsj_path, spmrl_path, stats);
@@ -199,13 +188,13 @@ fn extract_and_parse(wsj_path: &str, spmrl_path: &str, mut stats: &mut PCFGParsi
         parses.push(candidates.into_iter().map(|(nt, res)| (nt, (res.0, parsetree2ptbtree(&bin_ntdict, &res.1)))).collect())
     }
     
-    (testsents.clone(), testtrees, parses)
+    (testtrees, parses)
 }
 
 fn main() {
     let mut stats: PCFGParsingStatistics = PCFGParsingStatistics{
         // Placeholders
-        gram_ext_bin:f64::NAN, cky_prep:f64::NAN, cky_terms:f64::NAN, cky_higher:f64::NAN, oov_words:0, oov_sents:0, parsefails:0, fmeasure:f64::NAN, or_fail_fmeasure:f64::NAN, unbin_nts:std::usize::MAX, bin_nts:std::usize::MAX,
+        gram_ext_bin:f64::NAN, cky_prep:f64::NAN, cky_terms:f64::NAN, cky_higher:f64::NAN, oov_words:0, oov_sents:0, parsefails:0, fmeasure:f64::NAN, or_fail_fmeasure:f64::NAN, tagaccuracy:f64::NAN, unbin_nts:std::usize::MAX, bin_nts:std::usize::MAX,
         // Values
         language: "english".to_string(),
         trainsize: 7500,
@@ -280,6 +269,6 @@ fn main() {
         ap.parse_args_or_exit();
     }
     
-    let (testsents, testtrees, parses) = extract_and_parse(&wsj_path, &spmrl_path, &mut stats);
-    eval_parses(&testsents, &testtrees, parses, &mut stats);
+    let (testtrees, parses) = extract_and_parse(&wsj_path, &spmrl_path, &mut stats);
+    eval_parses(&testtrees, parses, &mut stats);
 }

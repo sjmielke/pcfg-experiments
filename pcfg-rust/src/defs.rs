@@ -109,12 +109,13 @@ pub struct PCFGParsingStatistics {
     pub parsefails: usize,
     // Percent
     pub fmeasure: f64,
-    pub or_fail_fmeasure: f64
+    pub or_fail_fmeasure: f64,
+    pub tagaccuracy: f64
 }
 impl PCFGParsingStatistics {
     pub fn print(&self, head: bool) {
         if head {
-            println!("language\ttrainsize\tunbin_nts\tbin_nts\toov_handling\tuniform_oov_prob\tfeature_structures\ttesttagsfile\tnbesttags\tnoafterdash\teta\talpha\tbeta\tkappa\tall_terms_fallback\texhaustive\tgram_ext_bin\tcky_prep\tcky_terms\tcky_higher\toov_words\toov_sents\tparsefails\tfmeasure\tfmeasure (fail ok)");
+            println!("language\ttrainsize\tunbin_nts\tbin_nts\toov_handling\tuniform_oov_prob\tfeature_structures\ttesttagsfile\tnbesttags\tnoafterdash\teta\talpha\tbeta\tkappa\tall_terms_fallback\texhaustive\tgram_ext_bin\tcky_prep\tcky_terms\tcky_higher\toov_words\toov_sents\tparsefails\tfmeasure\tfmeasure (fail ok)\ttagaccuracy");
         }
         print!("{}\t", self.language);
         print!("{}\t", self.trainsize);
@@ -140,7 +141,8 @@ impl PCFGParsingStatistics {
         print!("{}\t", self.oov_sents);
         print!("{}\t", self.parsefails);
         print!("{}\t", self.fmeasure);
-        println!("{}", self.or_fail_fmeasure);
+        print!("{}\t", self.or_fail_fmeasure);
+        println!("{}", self.tagaccuracy);
     }
 }
 
