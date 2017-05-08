@@ -99,7 +99,7 @@ fn print_example(bin_ntdict: &HashMap<NT, String>, sent: &str, tree: &PTBTree, s
     }
 }
 
-fn debinarize_filter_and_sort_candidates<'a>(cell: &HashMap<NT, (f64, ParseTree<'a>)>, bin_ntdict: &HashMap<NT, String>, initial_nts: &Vec<NT>) -> Vec<(NT, (f64, ParseTree<'a>))> {
+fn debinarize_and_sort_candidates<'a>(cell: &HashMap<NT, (f64, ParseTree<'a>)>, bin_ntdict: &HashMap<NT, String>) -> Vec<(NT, (f64, ParseTree<'a>))> {
     // Remove binarization traces
     let mut candidates: Vec<(NT, (f64, ParseTree))> = Vec::new();
     for (nt, &(p, ref ptree)) in cell {
@@ -119,7 +119,6 @@ fn debinarize_filter_and_sort_candidates<'a>(cell: &HashMap<NT, (f64, ParseTree<
             _ => c
         }
     }
-    let mut candidates = candidates.into_iter().filter(|&(nt, _)| initial_nts.contains(&nt)).collect::<Vec<_>>();
     candidates.sort_by(compare_results);
     candidates
 }
@@ -151,6 +150,9 @@ fn eval_parses(testsents: &Vec<String>, testtrees: &Vec<PTBTree>, parses: Vec<Ve
         writeln!(best_file, "{}", best_parse).unwrap();
         writeln!(best_or_fail_file, "{}", best_or_fail_parse).unwrap();
     }
+    
+    //use std::io::prelude::*;
+    //let _ = std::io::stdin().read(&mut [0u8]).unwrap();
     
     for line in String::from_utf8(Command::new("../EVALB/evalb").arg(&gold_path).arg(best_path).output().unwrap().stdout).unwrap().lines() {
         if line.starts_with("Bracketing FMeasure") {
@@ -190,10 +192,10 @@ fn extract_and_parse(wsj_path: &str, spmrl_path: &str, mut stats: &mut PCFGParsi
     stats.gram_ext_bin = get_usertime() - t;
     
     //println!("Now parsing!");
-    let raw_parses = parse::agenda_cky_parse(&bin_rules, &bin_ntdict, &testsents, &testposs, pret_distr_all, pret_distr_le3, &mut stats);
+    let raw_parses = parse::agenda_cky_parse(&bin_rules, &bin_ntdict, &initial_nts, &testsents, &testposs, pret_distr_all, pret_distr_le3, &mut stats);
     let mut parses: Vec<Vec<(NT, (f64, PTBTree))>> = Vec::new();
     for cell in raw_parses {
-        let candidates = debinarize_filter_and_sort_candidates(&cell, &bin_ntdict, &initial_nts);
+        let candidates = debinarize_and_sort_candidates(&cell, &bin_ntdict);
         parses.push(candidates.into_iter().map(|(nt, res)| (nt, (res.0, parsetree2ptbtree(&bin_ntdict, &res.1)))).collect())
     }
     

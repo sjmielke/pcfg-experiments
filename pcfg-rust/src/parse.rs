@@ -145,7 +145,7 @@ fn hashmap_to_vec<V: Default>(hm: HashMap<usize, V>) -> Vec<V> {
     mapvec
 }
 
-pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_ntdict: &HashMap<NT, String>, sents: &'a [String], poss: &'a Vec<Vec<Vec<(POSTag, f64)>>>, pret_distr_all: HashMap<NT, f64>, pret_distr_le3: HashMap<NT, f64>, stats: &mut PCFGParsingStatistics) -> Vec<HashMap<NT, (f64, ParseTree<'a>)>> {
+pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_ntdict: &HashMap<NT, String>, initial_nts: &Vec<NT>, sents: &'a [String], poss: &'a Vec<Vec<Vec<(POSTag, f64)>>>, pret_distr_all: HashMap<NT, f64>, pret_distr_le3: HashMap<NT, f64>, stats: &mut PCFGParsingStatistics) -> Vec<HashMap<NT, (f64, ParseTree<'a>)>> {
     // Build helper dicts for quick access. All are bottom-up in the parse.
     let t = get_usertime();
     let ntcount = bin_rules.len();
@@ -396,7 +396,7 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_n
         while let Some(AgendaItem(base_score, i, j, base_nt)) = agenda.pop() {
             // Let's check if we have a goal item (and can stop) first:
             if i == 0 && j == sentlen && base_nt <= stats.unbin_nts {
-                if !stats.exhaustive {
+                if initial_nts.contains(&base_nt) && !stats.exhaustive {
                     break
                 }
             }
@@ -475,7 +475,7 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_n
         }
         
         let mut r: HashMap<NT, (f64, ParseTree)> = HashMap::new();
-        for nt in 1..ntcount+1 {
+        for &nt in initial_nts {
             let item = ckychart[chart_adr(sentlen, ntcount, 0, sent.len(), nt)];
             if item.0 != ::std::f64::NEG_INFINITY {
                 let tree = recover_parsetree(&ckychart, sentlen, ntcount, 0, sent.len(), nt, &sent);

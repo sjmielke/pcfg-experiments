@@ -215,7 +215,9 @@ pub fn crunch_test_trees(read_devtrees: Vec<PTBTree>, stats: &PCFGParsingStatist
     let mut devposs: Vec<String> = Vec::new();
     let mut devtrees: Vec<PTBTree> = Vec::new();
     for mut t in read_devtrees {
-        t.strip_all_predicate_annotations();
+        if stats.language.to_uppercase() == "ENGLISH" {
+            t.strip_all_predicate_annotations()
+        }
         if stats.language.to_uppercase() != "ENGLISH" || t.front_length() <= 40 {
             devsents.push(t.front());
             devposs.push(t.pos_front());
