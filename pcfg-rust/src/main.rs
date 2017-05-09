@@ -202,7 +202,7 @@ fn main() {
         feature_structures: "exactmatch".to_string(),
         testtagsfile: "".to_string(),
         nbesttags: false,
-        noafterdash: false,
+        keepafterdash: false,
         eta: 1.0,
         alpha: 0.5,
         beta: 1.0,
@@ -236,9 +236,9 @@ fn main() {
         ap.refer(&mut stats.nbesttags)
             .add_option(&["--nbesttags"], StoreTrue,
             "Parse with all possible tags and their weights instead of just the argmax tag (n/a for gold, duh)");
-        ap.refer(&mut stats.noafterdash)
-            .add_option(&["--noafterdash"], StoreTrue,
-            "Remove everything after a - from SPMRL NTs (e.g., NP-SBJ => NP)");
+        ap.refer(&mut stats.keepafterdash)
+            .add_option(&["--keepafterdash"], StoreTrue,
+            "Keep everything after a - from SPMRL NTs (e.g., NP-SBJ instead of NP)");
         ap.refer(&mut stats.eta)
             .add_option(&["--eta"], Store,
             "Softness factor (default: 1.0)");

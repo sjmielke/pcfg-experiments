@@ -282,9 +282,9 @@ pub fn get_data(wsj_path: &str, spmrl_path: &str, stats: &mut PCFGParsingStatist
     fn read_caseinsensitive(prefix: &String, camellang: &String, stats: &PCFGParsingStatistics, bracketing: bool) -> Result<Vec<PTBTree>, Box<::std::error::Error>> {
         let name1 = prefix.to_string() + &camellang + ".gold.ptb";
         let name2 = prefix.to_string() + &camellang.to_lowercase() + ".gold.ptb";
-        match ptb_reader::parse_spmrl_ptb_file(&name1, bracketing, stats.noafterdash) {
+        match ptb_reader::parse_spmrl_ptb_file(&name1, bracketing, stats.keepafterdash) {
             t@Ok(_) => t,
-            Err(_) => ptb_reader::parse_spmrl_ptb_file(&name2, bracketing, stats.noafterdash)
+            Err(_) => ptb_reader::parse_spmrl_ptb_file(&name2, bracketing, stats.keepafterdash)
         }
     }
     
