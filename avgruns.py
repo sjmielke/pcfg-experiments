@@ -409,19 +409,21 @@ def levenshtein_plots():
     levenshtein_monsterplot()
     levenshtein_betaplot()
 
-def ml_tagged_plots():
-    indices = ['language', 'trainsize','feature_structures','oov_handling','eta']
+def ml_tagged_plots(noafterdash):
+    indices = ['language', 'trainsize','feature_structures','oov_handling','eta','noafterdash']
 
-    ml_tagged_df = join_file_frames([logroot + "/multilang_tagged_trainsize_eta.log"], indices)
+    ml_tagged_df = join_file_frames([logroot + f"/multilang_tagged_trainsize_eta.log"], indices)
+    ml_tagged_df = ml_tagged_df.xs(noafterdash, level='noafterdash')
 
-
-    tss = [10,50,100,500,1000,5000,10000,20000,39000]
+    tss = [100,500,1000,5000]
 
     def ml_tagged_monsterplot():
-        fig, ax = plt.subplots(3, 3, figsize=(10, 10)) #, sharex=True) #, sharey=True)
+        fig, ax = plt.subplots(1, 4, figsize=(12, 4), sharex=True, sharey=True)
 
-        for j in range(3):
-            for i in range(3):
+        ax = [ax]
+
+        for j in range(1):
+            for i in range(4):
                 ts = tss[i + 3*j]
                 
                 if (ml_tagged_df.index.get_level_values('trainsize') == ts).any():
@@ -435,17 +437,11 @@ def ml_tagged_plots():
                     all_langs = list(OrderedDict.fromkeys([t[0] for t in ml_tagged_df.index if t[1] >= ts]))
                     means = means.reindex(columns=all_langs)
                     
-                    try:
-                        baseline = tsdf.xs("exactmatch", level='feature_structures').xs("uniform", level='oov_handling').xs(1.0, level='eta')
-                        baseline = baseline['fmeasure']
-                        
-                        means.loc[0.0] = baseline
-                        means = means.sort_index(axis=0, level='eta', sort_remaining=False)
-                        
-                        means.plot(ax=ax[j][i], marker='o', markersize=2)
-                    except:
-                        pass
-
+                    means = means.sort_index(axis=0, level='eta', sort_remaining=False)
+                    
+                    for (lang, marker) in zip(all_langs, ['v','^','<','>','X','o','D','d']):
+                        means[lang].plot(ax=ax[j][i], marker=marker, markersize=3)
+                
                 ax[j][i].set_xscale('symlog', linthreshx=0.001, linscalex=0.3)
                 ax[j][i].set_xlabel("$\\eta$", labelpad=0)
                 # if ts > 100:
@@ -457,8 +453,8 @@ def ml_tagged_plots():
                 ax[j][i].grid(True)
 
         fig.tight_layout()
-        fig.savefig('/tmp/ml_tagged_monsterplot_eta.pdf', format='pdf', dpi=1000)
-        #fig.savefig('/tmp/ml_tagged_monsterplot_eta.png', format='png', dpi=1000)
+        fig.savefig(f'/tmp/ml_tagged_monsterplot_eta_{noafterdash}.pdf', format='pdf', dpi=1000)
+        #fig.savefig(f'/tmp/ml_tagged_monsterplot_eta_{noafterdash}.png', format='png', dpi=1000)
     
     ml_tagged_monsterplot()
 
@@ -467,4 +463,6 @@ def ml_tagged_plots():
 #lcs_plots()
 #dice_plots()
 #levenshtein_plots()
-ml_tagged_plots()
+
+ml_tagged_plots('nt_as_is')
+ml_tagged_plots('noafterdash')
