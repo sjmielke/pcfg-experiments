@@ -79,61 +79,60 @@ def pos_gold_plots(relative):
 
 def tagged_plots():
     indices = ['trainsize','feature_structures','oov_handling','eta','testtagsfile','nbesttags']
+    #indices = ['trainsize','feature_structures','oov_handling','eta','nbesttags']
 
-    tagged_df = join_file_frames([logroot + "/tagged_trainsize_eta_no39k.log", logroot + "/tagged_trainsize_eta_only39k.log"], indices)
+    tagged_df = join_file_frames([logroot + "/german_varitags.log"], indices).xs('postagsonly', level='feature_structures')
+    #tagged_df = join_file_frames([logroot + "/german_megatune.log"], indices).xs('postagsonly', level='feature_structures')
 
-    tss = [10,50,100,500,1000,5000,10000,20000,39000]
+    tss = [100,500,1000,5000,10000,40472]
 
     def tagged_monsterplot():
-        fig, ax = plt.subplots(3, 3, figsize=(10, 10), sharex=True) #, sharey=True)
+        fig, ax = plt.subplots(2, 3, figsize=(10, 6), sharex=True) #, sharey=True)
 
         for j in range(3):
             for i in range(3):
+                if len(tss) <= i + 3*j:
+                    continue
                 ts = tss[i + 3*j]
                 
                 if (tagged_df.index.get_level_values('trainsize') == ts).any():
-                    tsdf = tagged_df.sort_index()
-                    tsdf = tsdf.groupby(tsdf.index).max()
-                    tsdf.index = pd.MultiIndex.from_tuples(tsdf.index, names=indices)
-                    tsdf = tsdf.xs(ts, level='trainsize')
-                    tagged_only_df = tsdf.xs('postagsonly', level='feature_structures').reset_index()
+                    #tsdf = tagged_df.sort_index()
+                    #tsdf = tsdf.groupby(tsdf.index).max()
+                    #tsdf.index = pd.MultiIndex.from_tuples(tsdf.index, names=indices)
+                    tagged_only_df = tagged_df.loc[ts] # tagged_df.xs(ts, level='trainsize')
+                    tagged_only_df = tagged_only_df.reset_index()
                     
                     means = tagged_only_df.pivot_table(index='eta', columns=['testtagsfile','nbesttags'], values='fmeasure', aggfunc=np.mean)
+                    #means = tagged_only_df.pivot_table(index='eta', columns='nbesttags', values='fmeasure', aggfunc=np.mean)
                     
                     def simplifyfile(s):
+                        if '.' not in s[0]:
+                            assert(s[1] == "1besttags")
+                            return "gold tags" if s[0] == "" else s[0]
                         l = s[0].split(".")
                         mode = l[-1]
                         sts = l[-2]
                         if mode == "gold":
-                            return (mode, s[1])
+                            return "gold tags"
                         elif sts == "39000":
-                            return ("all (39000)", s[1])
+                            return "all (39000), " + s[1][0] + "-best"
+                        elif sts == "40472":
+                            return "all (40472), " + s[1][0] + "-best"
                         else:
-                            return (sts, s[1])
+                            return sts + ", " + s[1][0] + "-best"
                     
                     means.columns = means.columns.map(simplifyfile)
                     means.sort_index(axis=1, inplace=True)
                     
-                    try:
-                        baseline = tagged_df.loc[ts].loc["exactmatch"].loc["uniform"].loc[1.0].iloc[0]
-                        baseline = baseline['fmeasure']
-                        baseline = np.mean(baseline)
-                        
-                        means.loc[0.0] = baseline
-                        means = means.sort_index()
-                        
-                        means.plot(ax=ax[j][i], marker='o', markersize=2)
-                        
-                        ax[j][i].axhline(baseline, 0.0, 1.0, linestyle='dashed', linewidth=1, color='black')
-                    except:
-                        pass
-
+                    
+                    means.plot(ax=ax[j][i], marker='o', markersize=2)
+                
                 ax[j][i].set_xscale('symlog', linthreshx=0.01, linscalex=0.3)
                 ax[j][i].set_xlabel("$\\eta$", labelpad=0)
-                if ts > 100:
-                    (bot, top) = ax[j][i].get_ylim()
-                    mid = (bot + top) / 2
-                    ax[j][i].set_ylim(mid - 7, mid + 7)
+                # if ts > 100:
+                #     (bot, top) = ax[j][i].get_ylim()
+                #     mid = (bot + top) / 2
+                #     ax[j][i].set_ylim(mid - 7, mid + 7)
                 ax[j][i].set(ylabel='$F_1$ measure', title="trainsize {}".format(ts))
                 ax[j][i].legend(loc='lower right', title='tagger from', prop={'size':7})
                 ax[j][i].grid(True)
@@ -147,33 +146,36 @@ def tagged_plots():
 def lcs_plots():
     indices = ['trainsize','feature_structures','oov_handling','eta','beta']
 
-    lcs_df = join_file_frames([logroot + "/lcs_trainsize_beta_eta.log", logroot + "/lcs_trainsize_beta_eta_39k.log"], indices)
+    lcs_df = join_file_frames([logroot + "/german_megatune.log"], indices)
 
-    tss = [10,50,100,500,1000,5000,10000,20000,39000]
+    tss = [100,500,1000,5000,10000,40472]
 
     def lcs_ratio_monsterplot():
-        fig, ax = plt.subplots(3, 3, figsize=(10, 10), sharex=True) #, sharey=True)
+        fig, ax = plt.subplots(2, 3, figsize=(10, 6)) #, sharex=True) #, sharey=True)
 
         for j in range(3):
             for i in range(3):
+                if len(tss) <= i + 3*j:
+                    continue
                 ts = tss[i + 3*j]
                 
                 if (lcs_df.index.get_level_values('trainsize') == ts).any():
-                    tsdf = lcs_df.xs(ts, level='trainsize')
-                    lcs_only_df = tsdf.xs('lcsratio', level='feature_structures')
+                    lcs_only_df = lcs_df.xs('lcsratio', level='feature_structures')
+                    lcs_only_df = lcs_only_df.xs(ts, level='trainsize')
                     
-                    mask = lcs_only_df.index.get_level_values('beta').isin([1.0, 4.0, 10.0, 20.0, 30.0, 50.0])
-                    lcs_only_df = lcs_only_df[mask].reset_index()
+                    #mask = lcs_only_df.index.get_level_values('beta').isin([1.0, 4.0, 10.0, 20.0, 30.0, 50.0])
+                    #lcs_only_df = lcs_only_df[mask].reset_index()
+                    lcs_only_df = lcs_only_df.reset_index()
                     
                     means = lcs_only_df.pivot_table(index='eta', columns='beta', values='fmeasure', aggfunc=np.mean)
                     errs = lcs_only_df.pivot_table(index='eta', columns='beta', values='fmeasure', aggfunc=np.std)
                     try:
-                        baseline = lcs_df.loc[ts].loc["exactmatch"].loc["uniform"].loc[1.0].loc[1.0]
-                        baseline = baseline['fmeasure']
-                        baseline = np.mean(baseline)
-                        
-                        means.loc[0.0] = baseline
-                        means = means.sort_index()
+                        # baseline = lcs_df.loc[ts].loc["exactmatch"].loc["uniform"].loc[1.0].loc[1.0]
+                        # baseline = baseline['fmeasure']
+                        # baseline = np.mean(baseline)
+                        # 
+                        # means.loc[0.0] = baseline
+                        # means = means.sort_index()
                         
                         means.plot(ax=ax[j][i], marker='o', markersize=2, yerr=errs)
                         
@@ -183,8 +185,8 @@ def lcs_plots():
 
                 ax[j][i].set_xscale('symlog', linthreshx=0.001, linscalex=0.2)
                 ax[j][i].set_xlabel("$\\eta$", labelpad=0)
-                (bot, top) = ax[j][i].get_ylim()
-                ax[j][i].set_ylim(top - (top-bot)/3, top)
+                #(bot, top) = ax[j][i].get_ylim()
+                #ax[j][i].set_ylim(top - (top-bot)/3, top)
                 ax[j][i].set(ylabel='$F_1$ measure', title="trainsize {}".format(ts))
                 ax[j][i].legend(loc='lower right', title='$\\beta$', prop={'size':7})
                 ax[j][i].grid(True)
@@ -195,9 +197,9 @@ def lcs_plots():
 
     def lcs_ratio_betaplot():
         # tells us beta = 10 is decent?
-        fig, [eta0ax, eta100ax] = plt.subplots(1, 2, figsize=(9, 3), sharey=True)
+        fig, [eta0ax, eta50ax, eta100ax] = plt.subplots(1, 3, figsize=(9, 3), sharey=True)
 
-        for (eta, ax) in [(0.005, eta0ax), (0.5, eta100ax)]:
+        for (eta, ax) in [(0.006, eta0ax), (0.06, eta50ax), (0.6, eta100ax)]:
             df = lcs_df.xs('lcsratio', level='feature_structures')
             try:
                 df = df.xs(eta, level='eta')
@@ -220,9 +222,8 @@ def lcs_plots():
         fig.savefig('/tmp/lcs_beta_plot_eta.pdf', format='pdf', dpi=1000)
         fig.savefig('/tmp/lcs_beta_plot_eta.png', format='png', dpi=1000)
 
-
     def lcs_ratio_alphaplot():
-        df = join_file_frames([logroot + "/lcs_trainsize_beta10_eta005_alpha.log"], indices)
+        df = join_file_frames([logroot + "/german_lcs_alpha.log"], indices)
         
         fig, ax = plt.subplots(1, 1, figsize=(4, 3))
         
@@ -253,23 +254,26 @@ def lcs_plots():
 def dice_plots():
     indices = ['trainsize','feature_structures','oov_handling','eta','kappa']
 
-    dice_df = join_file_frames([logroot + "/dice_trainsize_kappa_eta.log", logroot + "/dice_trainsize_hugekappa_eta.log", logroot + "/dice_trainsize_kappa_eta_39k.log"], indices)
+    dice_df = join_file_frames([logroot + "/german_megatune.log"], indices)
 
-    tss = [10,50,100,500,1000,5000,10000,20000,39000]
+    tss = [100,500,1000,5000,10000,40472]
 
     def dice_monsterplot():
-        fig, ax = plt.subplots(3, 3, figsize=(10, 10), sharex=True) #, sharey=True)
+        fig, ax = plt.subplots(2, 3, figsize=(10, 6), sharex=True) #, sharey=True)
 
         for j in range(3):
             for i in range(3):
+                if len(tss) <= i + 3*j:
+                    continue
                 ts = tss[i + 3*j]
                 
                 if (dice_df.index.get_level_values('trainsize') == ts).any():
-                    tsdf = dice_df.xs(ts, level='trainsize')
-                    dice_only_df = tsdf.xs('dice', level='feature_structures')
+                    dice_only_df = dice_df.xs('dice', level='feature_structures')
+                    dice_only_df = dice_only_df.xs(ts, level='trainsize')
                     
-                    mask = dice_only_df.index.get_level_values('kappa').isin([1, 2, 4, 6, 8, 10, 50, 100])
+                    mask = dice_only_df.index.get_level_values('kappa').isin([1, 3, 5, 10, 50])
                     dice_only_df = dice_only_df[mask].reset_index()
+                    #dice_only_df = dice_only_df.reset_index()
                     
                     means = dice_only_df.pivot_table(index='eta', columns='kappa', values='fmeasure', aggfunc=np.mean)
                     errs = dice_only_df.pivot_table(index='eta', columns='kappa', values='fmeasure', aggfunc=np.std)
@@ -301,9 +305,9 @@ def dice_plots():
 
     def dice_kappaplot():
         # tells us kappa = 10 is decent?
-        fig, [eta0ax, eta100ax] = plt.subplots(1, 2, figsize=(9, 3), sharey=True)
+        fig, [eta0ax, eta50ax, eta100ax] = plt.subplots(1, 3, figsize=(9, 3), sharey=True)
 
-        for (eta, ax) in [(0.005, eta0ax), (0.5, eta100ax)]:
+        for (eta, ax) in [(0.006, eta0ax), (0.06, eta50ax), (0.6, eta100ax)]:
             df = dice_df.xs('dice', level='feature_structures')
             try:
                 df = df.xs(eta, level='eta')
@@ -313,7 +317,7 @@ def dice_plots():
                 means = df.pivot_table(index='kappa', columns='trainsize', values='fmeasure', aggfunc=np.mean)
                 means.plot(ax=ax, marker='o', markersize=2)
                 
-                ax.legend(loc='upper left', title='train size', prop={'size':7})
+                ax.legend(loc='lower right', title='train size', prop={'size':7})
                 #ax.set_xscale('symlog', linthreshx=0.1, linscalex=0.2)
                 ax.set_xscale('log')
                 ax.set_xlabel("$\\kappa$", labelpad=0)
@@ -333,23 +337,26 @@ def dice_plots():
 def levenshtein_plots():
     indices = ['trainsize','feature_structures','oov_handling','eta','beta']
 
-    levenshtein_df = join_file_frames([logroot + "/levenshtein_trainsize_beta_eta.log"], indices)
+    levenshtein_df = join_file_frames([logroot + "/german_megatune.log"], indices)
 
-    tss = [10,50,100,500,1000,5000,10000,20000,39000]
+    tss = [100,500,1000,5000,10000,40472]
 
     def levenshtein_monsterplot():
-        fig, ax = plt.subplots(3, 3, figsize=(10, 10) )#, sharex=True) #, sharey=True)
+        fig, ax = plt.subplots(2, 3, figsize=(10, 6) )#, sharex=True) #, sharey=True)
 
         for j in range(3):
             for i in range(3):
+                if len(tss) <= i + 3*j:
+                    continue
                 ts = tss[i + 3*j]
                 
                 if (levenshtein_df.index.get_level_values('trainsize') == ts).any():
-                    tsdf = levenshtein_df.xs(ts, level='trainsize')
-                    levenshtein_only_df = tsdf.xs('levenshtein', level='feature_structures')
+                    levenshtein_only_df = levenshtein_df.xs('levenshtein', level='feature_structures')
+                    levenshtein_only_df = levenshtein_only_df.xs(ts, level='trainsize')
                     
-                    mask = levenshtein_only_df.index.get_level_values('beta').isin([1.0, 4.0, 10.0, 20.0, 30.0, 50.0])
-                    levenshtein_only_df = levenshtein_only_df[mask].reset_index()
+                    #mask = levenshtein_only_df.index.get_level_values('beta').isin([1.0, 4.0, 10.0, 20.0, 30.0, 50.0])
+                    #levenshtein_only_df = levenshtein_only_df[mask].reset_index()
+                    levenshtein_only_df = levenshtein_only_df.reset_index()
                     
                     means = levenshtein_only_df.pivot_table(index='eta', columns='beta', values='fmeasure', aggfunc=np.mean)
                     errs = levenshtein_only_df.pivot_table(index='eta', columns='beta', values='fmeasure', aggfunc=np.std)
@@ -381,9 +388,9 @@ def levenshtein_plots():
 
     def levenshtein_betaplot():
         # tells us beta = 10 is decent?
-        fig, [eta0ax, eta100ax] = plt.subplots(1, 2, figsize=(9, 3), sharey=True)
+        fig, [eta0ax, eta50ax, eta100ax] = plt.subplots(1, 3, figsize=(9, 3), sharey=True)
 
-        for (eta, ax) in [(0.005, eta0ax), (0.5, eta100ax)]:
+        for (eta, ax) in [(0.006, eta0ax), (0.06, eta50ax), (0.6, eta100ax)]:
             df = levenshtein_df.xs('levenshtein', level='feature_structures')
             try:
                 df = df.xs(eta, level='eta')
@@ -393,7 +400,7 @@ def levenshtein_plots():
                 means = df.pivot_table(index='beta', columns='trainsize', values='fmeasure', aggfunc=np.mean)
                 means.plot(ax=ax, marker='o', markersize=2)
                 
-                ax.legend(loc='lower left', title='train size', prop={'size':7})
+                ax.legend(loc='lower right', title='train size', prop={'size':7})
                 ax.set_xscale('symlog', linthreshx=0.1, linscalex=0.2)
                 ax.set_xlabel("$\\beta$", labelpad=0)
                 ax.set(ylabel='$F_1$ measure')
@@ -415,15 +422,13 @@ def ml_tagged_plots(noafterdash):
     ml_tagged_df = join_file_frames([logroot + f"/multilang_tagged_trainsize_eta.log"], indices)
     ml_tagged_df = ml_tagged_df.xs(noafterdash, level='noafterdash')
 
-    tss = [100,500,1000,5000]
+    tss = [100,500,1000,5000,10,-1]
 
     def ml_tagged_monsterplot():
-        fig, ax = plt.subplots(1, 4, figsize=(12, 4), sharex=True, sharey=True)
+        fig, ax = plt.subplots(2, 3, figsize=(8, 8), sharex=True, sharey=True)
 
-        ax = [ax]
-
-        for j in range(1):
-            for i in range(4):
+        for j in range(2):
+            for i in range(3):
                 ts = tss[i + 3*j]
                 
                 if (ml_tagged_df.index.get_level_values('trainsize') == ts).any():
@@ -449,20 +454,21 @@ def ml_tagged_plots(noafterdash):
                 #     mid = (bot + top) / 2
                 #     ax[j][i].set_ylim(mid - 7, mid + 7)
                 ax[j][i].set(ylabel='$F_1$ measure', title="trainsize {}".format(ts))
-                ax[j][i].legend(loc='lower right', title='language', prop={'size':7})
                 ax[j][i].grid(True)
+        
+        ax[1][1].legend(loc='center', prop={'size':8}, bbox_to_anchor=(0.5, -0.2), ncol=len(all_langs))
 
-        fig.tight_layout()
+        fig.tight_layout(rect=[0, 0.05, 1, 1])
         fig.savefig(f'/tmp/ml_tagged_monsterplot_eta_{noafterdash}.pdf', format='pdf', dpi=1000)
         #fig.savefig(f'/tmp/ml_tagged_monsterplot_eta_{noafterdash}.png', format='png', dpi=1000)
     
     ml_tagged_monsterplot()
 
 #pos_gold_plots(relative=True)
-#tagged_plots()
+tagged_plots()
 #lcs_plots()
 #dice_plots()
 #levenshtein_plots()
 
-ml_tagged_plots('nt_as_is')
-ml_tagged_plots('noafterdash')
+#ml_tagged_plots('nt_as_is')
+#ml_tagged_plots('noafterdash')
