@@ -3,7 +3,8 @@ from sklearn.pipeline import Pipeline
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import classification_report
 
-pref = "/home/sjm/documents/Uni/FuzzySP/pcfg-experiments/pos-tagging/data/ptb."
+#pref = "/home/sjm/documents/Uni/FuzzySP/pcfg-experiments/pos-tagging/data/ptb."
+pref = "/home/sjm/documents/Uni/FuzzySP/pcfg-experiments/pos-tagging/data/spmrl.GERMAN."
 
 def features(sentence, index):
     """ sentence: [w1, w2, ...], index: the index of the word """
@@ -28,7 +29,8 @@ def features(sentence, index):
     }
 
 def read_prepared_corpus(tt):
-    sec = "2-21" if tt == "train" else "22"
+    #sec = "2-21" if tt == "train" else "22"
+    sec = tt
     with open(pref + sec + ".lex") as lex,\
          open(pref + sec + ".tag") as tag:
         l = zip(lex.read().splitlines(), tag.read().splitlines())
@@ -72,8 +74,8 @@ def pos_tags_log_proba(sentence):
         bests.append(maxc)
     return bests, outline
 
-for n in [10, 50, 100, 500, 1000, 5000, 10000, 20000, 39000]:
-#for n in [500]:
+#for n in [10, 50, 100, 500, 1000, 5000, 10000, 20000, 39000]:
+for n in [40472]:
     print(f"n = {n}")
 
     # Train classifier
@@ -88,13 +90,13 @@ for n in [10, 50, 100, 500, 1000, 5000, 10000, 20000, 39000]:
 
     # Test model
 
-    test_sentences = list(read_prepared_corpus("test"))
+    test_sentences = list(read_prepared_corpus("dev"))
     X_test, y_test = transform_to_dataset(test_sentences)
     print( "Accuracy:", clf.score(X_test, y_test)) # Accuracy: 0.951851851852
 
-    with open(pref + f'22.sklearn_tagged.{n}.word', 'w') as fw,\
-         open(pref + f'22.sklearn_tagged.{n}.pred', 'w') as ft,\
-         open(pref + f'22.sklearn_tagged.{n}.gold', 'w') as fg:
+    with open(pref + f'dev.sklearn_tagged.{n}.word', 'w') as fw,\
+         open(pref + f'dev.sklearn_tagged.{n}.pred', 'w') as ft,\
+         open(pref + f'dev.sklearn_tagged.{n}.gold', 'w') as fg:
         right = 0
         wrong = 0
         for (ws, gold) in test_sentences:
