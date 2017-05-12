@@ -164,12 +164,12 @@ pub fn crunch_train_trees(mut train_trees: Vec<PTBTree>, stats: &PCFGParsingStat
     let mut wc_all: usize = 0;
     let mut wc_le3: usize = 0;
     for (lhs, rhsmap) in &lhs_to_rhs_count {
-        // Make sure there's an entry so we get it in the final distribution!
-        // Also, note that we do +1 smoothing to allow everything :)
-        pret_counter_all.entry(*lhs).or_insert(1);
-        pret_counter_le3.entry(*lhs).or_insert(1);
         for (rhs, count) in rhsmap {
             if let RHS::Terminal(ref w) = *rhs {
+                // Make sure there's an entry so we get it in the final distribution!
+                // Also, note that we do +1 smoothing to allow everything :)
+                pret_counter_all.entry(*lhs).or_insert(1);
+                pret_counter_le3.entry(*lhs).or_insert(1);
                 let c = pret_counter_all.get_mut(lhs).unwrap();
                 *c = *c + *count;
                 wc_all += *count;
@@ -270,7 +270,7 @@ pub fn read_testtagsfile(filename: &str, golddata: Vec<String>, testmaxlen: Opti
     } else {
         golddata.iter()
                 .map(|s| s.split(' ')
-                          .map(|t| vec![(t.to_string(), 1.0)])
+                          .map(|t| vec![(t.to_string(), 0.0)]) // keep in mind: these are log probs!
                           .collect::<Vec<Vec<(POSTag, f64)>>>())
         .collect::<Vec<Vec<Vec<(POSTag, f64)>>>>()
     }
@@ -282,9 +282,9 @@ pub fn get_data(wsj_path: &str, spmrl_path: &str, stats: &mut PCFGParsingStatist
     fn read_caseinsensitive(prefix: &String, camellang: &String, stats: &PCFGParsingStatistics, bracketing: bool) -> Result<Vec<PTBTree>, Box<::std::error::Error>> {
         let name1 = prefix.to_string() + &camellang + ".gold.ptb";
         let name2 = prefix.to_string() + &camellang.to_lowercase() + ".gold.ptb";
-        match ptb_reader::parse_spmrl_ptb_file(&name1, bracketing, stats.keepafterdash) {
+        match ptb_reader::parse_spmrl_ptb_file(&name1, bracketing, !stats.keepafterdash) {
             t@Ok(_) => t,
-            Err(_) => ptb_reader::parse_spmrl_ptb_file(&name2, bracketing, stats.keepafterdash)
+            Err(_) => ptb_reader::parse_spmrl_ptb_file(&name2, bracketing, !stats.keepafterdash)
         }
     }
     
