@@ -203,6 +203,7 @@ fn main() {
         testtagsfile: "".to_string(),
         nbesttags: false,
         dualmono_pad: false,
+        logcompvalues: false,
         keepafterdash: false,
         eta: 1.0,
         alpha: 0.5,
@@ -255,6 +256,9 @@ fn main() {
         ap.refer(&mut stats.dualmono_pad)
             .add_option(&["--dualmono-pad"], StoreTrue,
             "grams = window(###word) ∪ window(word###) - instead of the standard grams = window(###word###)");
+        ap.refer(&mut stats.logcompvalues)
+            .add_option(&["--logcompvalues"], StoreTrue,
+            "write binned comp value statistics at the end of parsing (caution: very slow!)");
         ap.refer(&mut stats.all_terms_fallback)
             .add_option(&["--all-terms-fallback"], StoreTrue,
             "Allows OOV-like treatment to all terms as fallback");
