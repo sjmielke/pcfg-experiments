@@ -6,7 +6,7 @@ use defs::*;
 pub enum TerminalMatcher {
     POSTagMatcher (HashMap<POSTag, Vec<(String, NT, f64)>>),
     LCSRatioMatcher (f64, f64), // alpha, beta
-    DiceMatcher (usize, Vec<(HashSet<String>, Vec<(String, NT, f64)>)>), // kappa, assoc list from set of ngrams to list of rules
+    DiceMatcher (usize, bool, Vec<(HashSet<String>, Vec<(String, NT, f64)>)>), // kappa; dualmono_pad; assoc list from set of ngrams to list of rules
     LevenshteinMatcher(f64), // beta, TODO: trie for all for speed?
     ExactMatchOnly
 }
@@ -68,22 +68,30 @@ lazy_static! {
     static ref NGRAMMAP: Mutex<HashMap<String,HashSet<String>>> = Mutex::new(HashMap::new());
 }
 
-pub fn get_ngrams(kappa: usize, word: &str) -> HashSet<String> {
+pub fn get_ngrams(kappa: usize, dualmono_pad: bool, word: &str) -> HashSet<String> {
     if let Some(r) = NGRAMMAP.lock().unwrap().get(word) {
         return r.clone()
     }
     
-    let mut padded_word = "#".repeat(kappa - 1);
-    padded_word += word;
-    padded_word += &"#".repeat(kappa - 1);
+    fn getgrams(s: String, kappa: usize) -> HashSet<String> {
+        s
+            .chars()
+            .collect::<Vec<_>>()
+            .windows(kappa)
+            .map(|w| w.iter().cloned().collect())
+            .collect()
+    }
     
-    // https://codereview.stackexchange.com/questions/109461/jaccard-distance-between-strings-in-rust
-    let r: HashSet<String> = padded_word
-        .chars()
-        .collect::<Vec<_>>()
-        .windows(kappa)
-        .map(|w| w.iter().cloned().collect())
-        .collect();
+    let sharpstring = "#".repeat(kappa - 1);
+    
+    let r: HashSet<String> = if dualmono_pad {
+        let r1: HashSet<String> = getgrams(sharpstring.clone() + word, kappa);
+        let r2: HashSet<String> = getgrams(word.to_string() + &sharpstring, kappa);
+        
+        r1.union(&r2).cloned().collect()
+    } else {
+        getgrams(sharpstring.clone() + word + &sharpstring, kappa)
+    };
     
     // println!("{}:", word);
     // for g in &r {
@@ -123,7 +131,7 @@ pub fn embed_rules(
         "dice" => {
             let mut result = Vec::new();
             for (word, pret_vect) in word_to_preterminal {
-                let ngrams = get_ngrams(stats.kappa, word);
+                let ngrams = get_ngrams(stats.kappa, stats.dualmono_pad, word);
 
                 let mut rules = Vec::new();
                 for &(nt, logprob) in pret_vect {
@@ -131,7 +139,7 @@ pub fn embed_rules(
                 }
                 result.push((ngrams, rules));
             }
-            TerminalMatcher::DiceMatcher(stats.kappa, result)
+            TerminalMatcher::DiceMatcher(stats.kappa, stats.dualmono_pad, result)
         }
         "levenshtein" => {
             TerminalMatcher::LevenshteinMatcher(stats.beta)

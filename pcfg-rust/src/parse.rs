@@ -316,12 +316,12 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_n
                     }
                 }
             }
-            TerminalMatcher::DiceMatcher(kappa, ref ngrams_to_rules) => {
+            TerminalMatcher::DiceMatcher(kappa, dualmono_pad, ref ngrams_to_rules) => {
                 for (i, wsent) in sent.iter().enumerate() {
                     // go through Vec<(HashSet<Vec<char>>, Vec<(String, NT, f64)>)>
                     for &(ref ngrams_rule, ref rules) in ngrams_to_rules {
                         // calculate dice coefficient
-                        let ngrams_sent = get_ngrams(kappa, wsent);
+                        let ngrams_sent = get_ngrams(kappa, dualmono_pad, wsent);
                         let inter = ngrams_sent.intersection(&ngrams_rule).count() as f64;
                         let sum = (ngrams_sent.len() + ngrams_rule.len()) as f64;
                         let comp = 2.0 * inter / sum; // dice

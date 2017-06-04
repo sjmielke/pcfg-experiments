@@ -202,6 +202,7 @@ fn main() {
         feature_structures: "exactmatch".to_string(),
         testtagsfile: "".to_string(),
         nbesttags: false,
+        dualmono_pad: false,
         keepafterdash: false,
         eta: 1.0,
         alpha: 0.5,
@@ -251,6 +252,9 @@ fn main() {
         ap.refer(&mut stats.kappa)
             .add_option(&["--kappa"], Store,
             "Hyperparameter kappa (default: 1)");
+        ap.refer(&mut stats.dualmono_pad)
+            .add_option(&["--dualmono-pad"], StoreTrue,
+            "grams = window(###word) ∪ window(word###) - instead of the standard grams = window(###word###)");
         ap.refer(&mut stats.all_terms_fallback)
             .add_option(&["--all-terms-fallback"], StoreTrue,
             "Allows OOV-like treatment to all terms as fallback");
