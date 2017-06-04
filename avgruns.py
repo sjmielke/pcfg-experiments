@@ -81,13 +81,12 @@ def tagged_plots():
     indices = ['trainsize','feature_structures','oov_handling','eta','testtagsfile','nbesttags']
     #indices = ['trainsize','feature_structures','oov_handling','eta','nbesttags']
 
-    tagged_df = join_file_frames([logroot + "/german_varitags.log"], indices).xs('postagsonly', level='feature_structures')
-    #tagged_df = join_file_frames([logroot + "/german_megatune.log"], indices).xs('postagsonly', level='feature_structures')
+    tagged_df = join_file_frames([logroot + "/german_megatune.log", logroot + "/german_apocalypsetune_coarse.log"], indices).xs('postagsonly', level='feature_structures')
 
     tss = [100,500,1000,5000,10000,40472]
 
     def tagged_monsterplot():
-        fig, ax = plt.subplots(2, 3, figsize=(10, 6), sharex=True) #, sharey=True)
+        fig, ax = plt.subplots(2, 3, figsize=(10, 6)) #, sharex=True) #, sharey=True)
 
         for j in range(3):
             for i in range(3):
@@ -146,7 +145,7 @@ def tagged_plots():
 def lcs_plots():
     indices = ['trainsize','feature_structures','oov_handling','eta','beta']
 
-    lcs_df = join_file_frames([logroot + "/german_megatune.log"], indices)
+    lcs_df = join_file_frames([logroot + "/german_megatune.log", logroot + "/german_apocalypsetune_coarse.log"], indices)
 
     tss = [100,500,1000,5000,10000,40472]
 
@@ -223,7 +222,7 @@ def lcs_plots():
         fig.savefig('/tmp/lcs_beta_plot_eta.png', format='png', dpi=1000)
 
     def lcs_ratio_alphaplot():
-        df = join_file_frames([logroot + "/german_lcs_alpha.log"], indices)
+        df = join_file_frames([logroot + "/german_lcs_alpha.log", logroot + "/german_lcs_alpha_apocalypse.log"], indices)
         
         fig, ax = plt.subplots(1, 1, figsize=(4, 3))
         
@@ -239,7 +238,6 @@ def lcs_plots():
             ax.set_xlabel("$\\alpha$", labelpad=0)
             ax.set(ylabel='$F_1$ measure')
             ax.grid(True)
-            ax.set(title="Choice of $\\alpha$ for $\\eta={}$".format(eta))
         except:
             pass
 
@@ -254,12 +252,12 @@ def lcs_plots():
 def dice_plots():
     indices = ['trainsize','feature_structures','oov_handling','eta','kappa']
 
-    dice_df = join_file_frames([logroot + "/german_megatune.log"], indices)
+    dice_df = join_file_frames([logroot + "/german_megatune.log", logroot + "/german_apocalypsetune_coarse.log"], indices)
 
     tss = [100,500,1000,5000,10000,40472]
 
     def dice_monsterplot():
-        fig, ax = plt.subplots(2, 3, figsize=(10, 6), sharex=True) #, sharey=True)
+        fig, ax = plt.subplots(2, 3, figsize=(10, 6)) #, sharex=True) #, sharey=True)
 
         for j in range(3):
             for i in range(3):
@@ -337,12 +335,12 @@ def dice_plots():
 def levenshtein_plots():
     indices = ['trainsize','feature_structures','oov_handling','eta','beta']
 
-    levenshtein_df = join_file_frames([logroot + "/german_megatune.log"], indices)
+    levenshtein_df = join_file_frames([logroot + "/german_megatune.log", logroot + "/german_apocalypsetune_coarse.log"], indices)
 
     tss = [100,500,1000,5000,10000,40472]
 
     def levenshtein_monsterplot():
-        fig, ax = plt.subplots(2, 3, figsize=(10, 6) )#, sharex=True) #, sharey=True)
+        fig, ax = plt.subplots(2, 3, figsize=(10, 6)) #, sharex=True) #, sharey=True)
 
         for j in range(3):
             for i in range(3):
@@ -425,7 +423,7 @@ def ml_tagged_plots(noafterdash):
     tss = [100,500,1000,5000,10,-1]
 
     def ml_tagged_monsterplot():
-        fig, ax = plt.subplots(2, 3, figsize=(8, 8), sharex=True, sharey=True)
+        fig, ax = plt.subplots(2, 3, figsize=(8, 8)) #, sharex=True, sharey=True)
 
         for j in range(2):
             for i in range(3):
@@ -466,9 +464,9 @@ def ml_tagged_plots(noafterdash):
 
 #pos_gold_plots(relative=True)
 tagged_plots()
-#lcs_plots()
-#dice_plots()
-#levenshtein_plots()
+lcs_plots()
+dice_plots()
+levenshtein_plots()
 
 #ml_tagged_plots('nt_as_is')
 #ml_tagged_plots('noafterdash')
