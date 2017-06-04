@@ -146,6 +146,30 @@ fn hashmap_to_vec<V: Default>(hm: HashMap<usize, V>) -> Vec<V> {
 }
 
 pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_ntdict: &HashMap<NT, String>, initial_nts: &Vec<NT>, sents: &'a [String], poss: &'a Vec<Vec<Vec<(POSTag, f64)>>>, pret_distr_all: HashMap<NT, f64>, pret_distr_le3: HashMap<NT, f64>, stats: &mut PCFGParsingStatistics) -> Vec<HashMap<NT, (f64, ParseTree<'a>)>> {
+    
+    #[inline]
+    fn bin(val: f64) -> usize {
+        let noofbins = 20 as f64;
+        (val * noofbins).ceil() as usize
+    }
+    fn unbin(bin: usize) -> f64 {
+        let noofbins = 20 as f64;
+        (bin as f64) / noofbins
+    }
+    
+    #[inline]
+    fn logcompvalue(comp: f64, wsent: &str, wrule: &str, fullmatches: &mut usize, bins: &mut Vec<usize>) {
+        bins[bin(comp)] += 1;
+        if wsent == wrule {*fullmatches += 1}
+    }
+    
+    let maxbin = bin(1.0);
+    let mut bins: Vec<usize> = Vec::with_capacity(maxbin+1);
+    bins.resize(maxbin+1, 0);
+    
+    let mut fullmatches = 0;
+    
+    
     // Build helper dicts for quick access. All are bottom-up in the parse.
     let t = get_usertime();
     let ntcount = bin_rules.len();
@@ -231,6 +255,7 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_n
                             //   = p(r) + ln(η ⋅ comp + (1-η) ⋅ δ(σ = σ'))
                             if stats.nbesttags {
                                 for &(ref pos, lp) in wsent_pos_desc {
+                                    logcompvalue(lp.exp(), &wsent, &wrule, &mut fullmatches, &mut bins);
                                     let prob_addendum =
                                         (if pos_r == pos   {    stats.eta * lp.exp()} else {0.0}) +
                                         (if wsent == wrule {1.0-stats.eta           } else {0.0});
@@ -244,6 +269,8 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_n
                                 }
                             } else { //1best
                                 let pos = max_pos;
+                                assert_eq!(max_lp, 0.0);
+                                logcompvalue(if pos_r == pos {1.0} else {0.0}, &wsent, &wrule, &mut fullmatches, &mut bins);
                                 if pos_r == pos && n == 999999999 {n = nt} else { assert!(pos_r != pos || n == nt) };
                                 let prob_addendum =
                                     (if pos_r == pos   {    stats.eta} else {0.0}) +
@@ -270,7 +297,8 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_n
                                 /
                                 (alpha * (wrule_seq.len() as f64) + (1.0-alpha) * (wsent_seq.len() as f64))
                             ).powf(beta);
-                        
+                            
+                        logcompvalue(comp, &wsent, &wrule, &mut fullmatches, &mut bins);
                         if comp > 0.0 {
                             // p ̃(r(σ'))
                             //   = p(r) ⋅   (η ⋅ comp + (1-η) ⋅ δ(σ = σ'))   (now into log space...)
@@ -298,11 +326,12 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_n
                         let sum = (ngrams_sent.len() + ngrams_rule.len()) as f64;
                         let comp = 2.0 * inter / sum; // dice
                         
-                        if comp > 0.0 {
-                            // p ̃(r(σ'))
-                            //   = p(r) ⋅   (η ⋅ comp + (1-η) ⋅ δ(σ = σ'))   (now into log space...)
-                            //   = p(r) + ln(η ⋅ comp + (1-η) ⋅ δ(σ = σ'))
-                            for &(ref wrule, nt, logprob) in rules {
+                        for &(ref wrule, nt, logprob) in rules {
+                            logcompvalue(comp, &wsent, &wrule, &mut fullmatches, &mut bins);
+                            if comp > 0.0 {
+                                // p ̃(r(σ'))
+                                //   = p(r) ⋅   (η ⋅ comp + (1-η) ⋅ δ(σ = σ'))   (now into log space...)
+                                //   = p(r) + ln(η ⋅ comp + (1-η) ⋅ δ(σ = σ'))
                                 let addr = chart_adr(sentlen, ntcount, i, i + 1, nt);
                                 let logprob_addendum: f64 = (stats.eta * comp + (if wrule == wsent {1.0-stats.eta} else {0.0})).ln();
                                 let logprob = logprob + logprob_addendum;
@@ -327,6 +356,7 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_n
                         assert!(comp <= 1.0);
                         assert!(comp >= 0.0);
                         
+                        logcompvalue(comp, &wsent, &wrule, &mut fullmatches, &mut bins);
                         if comp > 0.0 {
                             // p ̃(r(σ'))
                             //   = p(r) ⋅   (η ⋅ comp + (1-η) ⋅ δ(σ = σ'))   (now into log space...)
@@ -488,6 +518,11 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_n
         }
         results.push(r)
     }
+    
+    for i in 0..(maxbin+1) {
+        println!(">= {}: {}", unbin(i), bins[i])
+    }
+    println!("full: {}", fullmatches);
     
     results
 }
