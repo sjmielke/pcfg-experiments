@@ -96,8 +96,8 @@ fn test_chart_adr() {
 }
 
 #[derive(PartialEq, PartialOrd)]
-/// Score, span l/r, finished NT, l/r pred address (can be MAX for ɛ)
-struct AgendaItem(f64, usize, usize, NT, usize, usize);
+/// Score, span l/r, finished NT
+struct AgendaItem(f64, usize, usize, NT);
 impl ::std::cmp::Eq for AgendaItem {}
 impl ::std::cmp::Ord for AgendaItem {
     fn cmp(&self, other: &Self) -> ::std::cmp::Ordering {
@@ -210,8 +210,7 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_n
         
         // Kick it off with the terminals!
         let t = get_usertime();
-        let mut best_term_found: Vec<f64> = Vec::with_capacity(sentlen);
-        best_term_found.resize(sentlen, ::std::f64::NEG_INFINITY);
+        let uniform_oov_prob = stats.uniform_oov_prob;
         // First do the good ones...
         match terminal_matcher {
             TerminalMatcher::ExactMatchOnly => {
@@ -219,8 +218,9 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_n
                     match word_to_preterminal.get(*w) {
                         Some(prets) => {
                             for &(nt, logprob) in prets {
-                                agenda.push(AgendaItem(logprob, i, i+1, nt, ::std::usize::MAX, ::std::usize::MAX));
-                                best_term_found[i] = best_term_found[i].max(logprob)
+                                let addr = chart_adr(sentlen, ntcount, i, i + 1, nt);
+                                ckychart[addr].0 = logprob;
+                                agenda.push(AgendaItem(logprob, i, i+1, nt))
                             }
                         }
                         None => {
@@ -249,6 +249,7 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_n
                     // go through HashMap<POSTag, Vec<(String, NT, f64)>>
                     for (pos_r, rules) in feature_to_rules {
                         for &(ref wrule, nt, logprob) in rules {
+                            let addr = chart_adr(sentlen, ntcount, i, i + 1, nt);
                             // p ̃(r(σ'))
                             //   = p(r) ⋅ (η ⋅ comp + (1-η) ⋅ δ(σ = σ'))  (now into log space...)
                             //   = p(r) + ln(η ⋅ comp + (1-η) ⋅ δ(σ = σ'))
@@ -260,8 +261,10 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_n
                                         (if wsent == wrule {1.0-stats.eta           } else {0.0});
                                     if prob_addendum > 0.0 {
                                         let logprob = logprob + prob_addendum.ln();
-                                        agenda.push(AgendaItem(logprob, i, i+1, nt, ::std::usize::MAX, ::std::usize::MAX));
-                                        best_term_found[i] = best_term_found[i].max(logprob)
+                                        if ckychart[addr].0 < logprob {
+                                            ckychart[addr].0 = logprob;
+                                            agenda.push(AgendaItem(logprob, i, i+1, nt))
+                                        }
                                     }
                                 }
                             } else { //1best
@@ -274,8 +277,10 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_n
                                     (if wsent == wrule {1.0-stats.eta} else {0.0});
                                 if prob_addendum > 0.0 {
                                     let logprob = logprob + prob_addendum.ln();
-                                    agenda.push(AgendaItem(logprob, i, i+1, nt, ::std::usize::MAX, ::std::usize::MAX));
-                                    best_term_found[i] = best_term_found[i].max(logprob)
+                                    if ckychart[addr].0 < logprob {
+                                        ckychart[addr].0 = logprob;
+                                        agenda.push(AgendaItem(logprob, i, i+1, nt))
+                                    }
                                 }
                             }
                         }
@@ -300,9 +305,12 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_n
                             //   = p(r) + ln(η ⋅ comp + (1-η) ⋅ δ(σ = σ'))
                             let logprob_addendum: f64 = (stats.eta * comp + (if wrule == wsent {1.0-stats.eta} else {0.0})).ln();
                             for &(nt, logprob) in prets {
+                                let addr = chart_adr(sentlen, ntcount, i, i + 1, nt);
                                 let logprob = logprob + logprob_addendum;
-                                agenda.push(AgendaItem(logprob, i, i+1, nt, ::std::usize::MAX, ::std::usize::MAX));
-                                best_term_found[i] = best_term_found[i].max(logprob)
+                                if ckychart[addr].0 < logprob {
+                                    ckychart[addr].0 = logprob;
+                                    agenda.push(AgendaItem(logprob, i, i+1, nt))
+                                }
                             }
                         }
                     }
@@ -324,10 +332,13 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_n
                                 // p ̃(r(σ'))
                                 //   = p(r) ⋅   (η ⋅ comp + (1-η) ⋅ δ(σ = σ'))   (now into log space...)
                                 //   = p(r) + ln(η ⋅ comp + (1-η) ⋅ δ(σ = σ'))
+                                let addr = chart_adr(sentlen, ntcount, i, i + 1, nt);
                                 let logprob_addendum: f64 = (stats.eta * comp + (if wrule == wsent {1.0-stats.eta} else {0.0})).ln();
                                 let logprob = logprob + logprob_addendum;
-                                agenda.push(AgendaItem(logprob, i, i+1, nt, ::std::usize::MAX, ::std::usize::MAX));
-                                best_term_found[i] = best_term_found[i].max(logprob)
+                                if ckychart[addr].0 < logprob {
+                                    ckychart[addr].0 = logprob;
+                                    agenda.push(AgendaItem(logprob, i, i+1, nt))
+                                }
                             }
                         }
                     }
@@ -352,9 +363,12 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_n
                             //   = p(r) + ln(η ⋅ comp + (1-η) ⋅ δ(σ = σ'))
                             let logprob_addendum: f64 = (stats.eta * comp + (if wrule == wsent {1.0-stats.eta} else {0.0})).ln();
                             for &(nt, logprob) in prets {
+                                let addr = chart_adr(sentlen, ntcount, i, i + 1, nt);
                                 let logprob = logprob + logprob_addendum;
-                                agenda.push(AgendaItem(logprob, i, i+1, nt, ::std::usize::MAX, ::std::usize::MAX));
-                                best_term_found[i] = best_term_found[i].max(logprob)
+                                if ckychart[addr].0 < logprob {
+                                    ckychart[addr].0 = logprob;
+                                    agenda.push(AgendaItem(logprob, i, i+1, nt))
+                                }
                             }
                         }
                     }
@@ -363,24 +377,43 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_n
         }
         // ...then do the fallback.
         for (i, _) in sent.iter().enumerate() {
-            if best_term_found[i] == ::std::f64::NEG_INFINITY || stats.all_terms_fallback {
+            let mut nothing_was_found = true;
+            for nt in &all_preterminals {
+                let addr = chart_adr(sentlen, ntcount, i, i + 1, *nt);
+                if ckychart[addr].0 != ::std::f64::NEG_INFINITY {
+                    nothing_was_found = false;
+                }
+            }
+            if nothing_was_found || stats.all_terms_fallback {
                 match stats.oov_handling {
                     OOVHandling::Zero => (),
                     OOVHandling::Uniform => {
                         for nt in &all_preterminals {
-                            agenda.push(AgendaItem(stats.uniform_oov_prob, i, i+1, *nt, ::std::usize::MAX, ::std::usize::MAX))
+                            let addr = chart_adr(sentlen, ntcount, i, i + 1, *nt);
+                            if uniform_oov_prob > ckychart[addr].0 { // for all_terms_fallback that should be checked
+                                ckychart[addr].0 = uniform_oov_prob;
+                                agenda.push(AgendaItem(uniform_oov_prob, i, i+1, *nt))
+                            }
                         }
                     },
                     OOVHandling::MarginalAll => {
                         for (nt, p) in &pret_distr_all {
-                            let logprob = p.ln() + stats.uniform_oov_prob;
-                            agenda.push(AgendaItem(logprob, i, i+1, *nt, ::std::usize::MAX, ::std::usize::MAX))
+                            let addr = chart_adr(sentlen, ntcount, i, i + 1, *nt);
+                            let logprob = p.ln() + uniform_oov_prob;
+                            if logprob > ckychart[addr].0 { // for all_terms_fallback that should be checked
+                                ckychart[addr].0 = logprob;
+                                agenda.push(AgendaItem(logprob, i, i+1, *nt))
+                            }
                         }
                     }
                     OOVHandling::MarginalLe3 => {
                         for (nt, p) in &pret_distr_le3 {
-                            let logprob = p.ln() + stats.uniform_oov_prob;
-                            agenda.push(AgendaItem(logprob, i, i+1, *nt, ::std::usize::MAX, ::std::usize::MAX))
+                            let addr = chart_adr(sentlen, ntcount, i, i + 1, *nt);
+                            let logprob = p.ln() + uniform_oov_prob;
+                            if logprob > ckychart[addr].0 { // for all_terms_fallback that should be checked
+                                ckychart[addr].0 = logprob;
+                                agenda.push(AgendaItem(logprob, i, i+1, *nt))
+                            }
                         }
                     }
                 }
@@ -390,34 +423,36 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_n
         
         // Now do the lengthy agenda-working
         let t = get_usertime();
-        while let Some(AgendaItem(base_score, i, j, base_nt, lpred_adr, rpred_adr)) = agenda.pop() {
+        while let Some(AgendaItem(base_score, i, j, base_nt)) = agenda.pop() {
             // Let's check if we have a goal item (and can stop) first:
             if i == 0 && j == sentlen && base_nt <= stats.unbin_nts {
                 if initial_nts.contains(&base_nt) && !stats.exhaustive {
-                    // Commit (!) and break
-                    let base_addr = chart_adr(sentlen, ntcount, i, j, base_nt);
-                    ckychart[base_addr] = (base_score, lpred_adr, rpred_adr);
                     break
                 }
             }
             
             let base_addr = chart_adr(sentlen, ntcount, i, j, base_nt);
             //assert_eq!(ckychart[base_addr].0, base_score); // <- this actually does not hold, since it could have been updated in the meantime!
+            assert!(base_score <= ckychart[base_addr].0); // This does. We should never have better agenda entries than chart entries.
+            
             // Check if the score is still the same in the chart as in the agenda...
             if base_score < ckychart[base_addr].0 {
                 // ...if not we found (and used!) a better one already and can skip this one!
                 continue
             }
-            // Otherwise we can write the agenda entry to the chart as it is certifiably the best possible
-            ckychart[base_addr] = (base_score, lpred_adr, rpred_adr);
             
-            // And now we can recombine with it!
+            //println!("Popping ({}, {}, {})", i, j, base_nt);
             
             // base is RHS of a unary rule
             if let Some(v) = nt_chains_vec.get(base_nt) {
                 for &(lhs, logprob) in v {
+                    let high_addr = chart_adr(sentlen, ntcount, i, j, lhs);
                     let newscore = base_score + logprob;
-                    agenda.push(AgendaItem(newscore, i, j, lhs, base_addr, ::std::usize::MAX))
+                    
+                    if ckychart[high_addr].0 < newscore {
+                        ckychart[high_addr] = (newscore, base_addr, ::std::usize::MAX);
+                        agenda.push(AgendaItem(newscore, i, j, lhs))
+                    }
                 }
             }
             
@@ -429,8 +464,13 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_n
                         let rhs_r_addr = chart_adr(sentlen, ntcount, j, k, rhs_r);
                         let rhs_r_score = ckychart[rhs_r_addr].0;
                         if rhs_r_score != ::std::f64::NEG_INFINITY {
+                            let high_addr = chart_adr(sentlen, ntcount, i, k, lhs);
                             let newscore = base_score + rhs_r_score + logprob;
-                            agenda.push(AgendaItem(newscore, i, k, lhs, base_addr, rhs_r_addr))
+                            
+                            if ckychart[high_addr].0 < newscore {
+                                ckychart[high_addr] = (newscore, base_addr, rhs_r_addr);
+                                agenda.push(AgendaItem(newscore, i, k, lhs))
+                            }
                         }
                     }
                 }
@@ -445,8 +485,13 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_n
                             let rhs_l_addr = chart_adr(sentlen, ntcount, h, i, rhs_l);
                             let rhs_l_score = ckychart[rhs_l_addr].0;
                             if rhs_l_score != ::std::f64::NEG_INFINITY {
+                                let high_addr = chart_adr(sentlen, ntcount, h, j, lhs);
                                 let newscore = base_score + rhs_l_score + logprob;
-                                agenda.push(AgendaItem(newscore, h, j, lhs, rhs_l_addr, base_addr))
+                                
+                                if ckychart[high_addr].0 < newscore {
+                                    ckychart[high_addr] = (newscore, rhs_l_addr, base_addr);
+                                    agenda.push(AgendaItem(newscore, h, j, lhs))
+                                }
                             }
                         }
                     }
