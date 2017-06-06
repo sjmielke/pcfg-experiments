@@ -283,7 +283,7 @@ pub fn agenda_cky_parse<'a>(
                     // go through HashMap<POSTag, Vec<(String, NT, f64)>>
                     for (pos_r, rules) in feature_to_rules {
                         let comp = if stats.nbesttags { //nbest
-                            wsent_pos_desc_hashmap[&pos_r[..]].exp()
+                            wsent_pos_desc_hashmap.get(&pos_r[..]).unwrap_or(&::std::f64::NEG_INFINITY).exp()
                         } else { //1best
                             // Sanity checks
                             assert_eq!(max_lp, 0.0);
