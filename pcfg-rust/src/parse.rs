@@ -145,8 +145,17 @@ fn hashmap_to_vec<V: Default>(hm: HashMap<usize, V>) -> Vec<V> {
     mapvec
 }
 
-pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_ntdict: &HashMap<NT, String>, initial_nts: &Vec<NT>, sents: &'a [String], poss: &'a Vec<Vec<Vec<(POSTag, f64)>>>, pret_distr_all: HashMap<NT, f64>, pret_distr_le3: HashMap<NT, f64>, stats: &mut PCFGParsingStatistics) -> Vec<HashMap<NT, (f64, ParseTree<'a>)>> {
-    
+pub fn agenda_cky_parse<'a>(
+    bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>,
+    bin_ntdict: &HashMap<NT, String>,
+    initial_nts: &Vec<NT>,
+    sents: &'a [String],
+    poss: &'a Vec<Vec<Vec<(POSTag, f64)>>>,
+    pret_distr_all: HashMap<NT, f64>,
+    pret_distr_le3: HashMap<NT, f64>,
+    mut stats: &mut PCFGParsingStatistics)
+    -> Vec<HashMap<NT, (f64, ParseTree<'a>)>>
+{
     #[inline]
     fn bin(val: f64) -> usize {
         let noofbins = 20 as f64;
@@ -155,12 +164,6 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_n
     fn unbin(bin: usize) -> f64 {
         let noofbins = 20 as f64;
         (bin as f64) / noofbins
-    }
-    
-    #[inline]
-    fn logcompvalue(comp: f64, wsent: &str, wrule: &str, fullmatches: &mut usize, bins: &mut Vec<usize>) {
-        bins[bin(comp)] += 1;
-        if wsent == wrule {*fullmatches += 1}
     }
     
     let maxbin = bin(1.0);
@@ -212,34 +215,65 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_n
         let t = get_usertime();
         let uniform_oov_prob = stats.uniform_oov_prob;
         // First do the good ones...
-        match terminal_matcher {
-            TerminalMatcher::ExactMatchOnly => {
-                for (i, w) in sent.iter().enumerate() {
-                    match word_to_preterminal.get(*w) {
-                        Some(prets) => {
-                            for &(nt, logprob) in prets {
-                                let addr = chart_adr(sentlen, ntcount, i, i + 1, nt);
-                                ckychart[addr].0 = logprob;
-                                agenda.push(AgendaItem(logprob, i, i+1, nt))
-                            }
-                        }
-                        None => {
-                            oov_in_this_sent = true;
-                            stats.oov_words += 1;
+        
+        fn handle_comp_for_wsent_and_rules (
+            comp: f64,
+            ckychart: &mut Vec<(f64, usize, usize)>,
+            agenda: &mut BinaryHeap<AgendaItem>,
+            i: usize,
+            sentlen: usize,
+            ntcount: usize,
+            wsent: &str,
+            rules: &Vec<(String, NT, f64)>,
+            bins: &mut Vec<usize>,
+            fullmatches: &mut usize,
+            stats: &mut PCFGParsingStatistics)
+        {
+            for &(ref wrule, nt, logprob) in rules {
+                if stats.logcompvalues {
+                    bins[bin(comp)] += 1;
+                    if wsent == wrule {*fullmatches += 1}
+                };
+                
+                let lp_add = if wrule == wsent {
+                    (stats.eta * comp + (1.0-stats.eta)).ln()
+                } else {
+                    (stats.eta * comp                  ).ln()
+                };
+                if lp_add == ::std::f64::NEG_INFINITY {continue};
+                let addr = chart_adr(sentlen, ntcount, i, i + 1, nt);
+                let logprob = logprob + lp_add;
+                if ckychart[addr].0 < logprob {
+                    ckychart[addr].0 = logprob;
+                    agenda.push(AgendaItem(logprob, i, i+1, nt))
+                }
+            }
+        }
+        
+        assert_eq!(pos_descs.len(), sentlen);
+        for (i, (wsent, wsent_pos_desc)) in sent.iter().zip(pos_descs).enumerate() {
+            if word_to_preterminal.get(*wsent) == None {
+                oov_in_this_sent = true;
+                stats.oov_words += 1
+            }
+            
+            match terminal_matcher {
+                TerminalMatcher::ExactMatchOnly => {
+                    if let Some(tagginglogprobs) = word_to_preterminal.get(*wsent) {
+                        for &(nt, logprob) in tagginglogprobs {
+                            let addr = chart_adr(sentlen, ntcount, i, i + 1, nt);
+                            ckychart[addr].0 = logprob;
+                            agenda.push(AgendaItem(logprob, i, i+1, nt))
                         }
                     }
-                }
-            },
-            TerminalMatcher::POSTagMatcher(ref feature_to_rules) => {
-                assert_eq!(pos_descs.len(), sentlen);
-                for (i, (wsent, wsent_pos_desc)) in sent.iter().zip(pos_descs).enumerate() {
-                    // We wanna assert that only one NT is usable per terminals (duh)
-                    let mut n: usize = 999999999;
-                    
+                },
+                TerminalMatcher::POSTagMatcher(ref feature_to_rules) => {
                     // Extract the argmax POS tag
                     let mut max_lp = ::std::f64::NEG_INFINITY;
                     let mut max_pos: &str = "";
+                    let mut wsent_pos_desc_hashmap: HashMap<&str, f64> = HashMap::new();
                     for &(ref p, lp) in wsent_pos_desc {
+                        wsent_pos_desc_hashmap.insert(p, lp);
                         if lp >= max_lp {
                             max_pos = p;
                             max_lp = lp
@@ -248,48 +282,19 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_n
                     
                     // go through HashMap<POSTag, Vec<(String, NT, f64)>>
                     for (pos_r, rules) in feature_to_rules {
-                        for &(ref wrule, nt, logprob) in rules {
-                            let addr = chart_adr(sentlen, ntcount, i, i + 1, nt);
-                            // p ̃(r(σ'))
-                            //   = p(r) ⋅ (η ⋅ comp + (1-η) ⋅ δ(σ = σ'))  (now into log space...)
-                            //   = p(r) + ln(η ⋅ comp + (1-η) ⋅ δ(σ = σ'))
-                            if stats.nbesttags {
-                                for &(ref pos, lp) in wsent_pos_desc {
-                                    if stats.logcompvalues {logcompvalue(lp.exp(), &wsent, &wrule, &mut fullmatches, &mut bins)};
-                                    let prob_addendum =
-                                        (if pos_r == pos   {    stats.eta * lp.exp()} else {0.0}) +
-                                        (if wsent == wrule {1.0-stats.eta           } else {0.0});
-                                    if prob_addendum > 0.0 {
-                                        let logprob = logprob + prob_addendum.ln();
-                                        if ckychart[addr].0 < logprob {
-                                            ckychart[addr].0 = logprob;
-                                            agenda.push(AgendaItem(logprob, i, i+1, nt))
-                                        }
-                                    }
-                                }
-                            } else { //1best
-                                let pos = max_pos;
-                                assert_eq!(max_lp, 0.0);
-                                if stats.logcompvalues {logcompvalue(if pos_r == pos {1.0} else {0.0}, &wsent, &wrule, &mut fullmatches, &mut bins)};
-                                if pos_r == pos && n == 999999999 {n = nt} else { assert!(pos_r != pos || n == nt) };
-                                let prob_addendum =
-                                    (if pos_r == pos   {    stats.eta} else {0.0}) +
-                                    (if wsent == wrule {1.0-stats.eta} else {0.0});
-                                if prob_addendum > 0.0 {
-                                    let logprob = logprob + prob_addendum.ln();
-                                    if ckychart[addr].0 < logprob {
-                                        ckychart[addr].0 = logprob;
-                                        agenda.push(AgendaItem(logprob, i, i+1, nt))
-                                    }
-                                }
-                            }
-                        }
+                        let comp = if stats.nbesttags { //nbest
+                            wsent_pos_desc_hashmap[&pos_r[..]].exp()
+                        } else { //1best
+                            // Sanity checks
+                            assert_eq!(max_lp, 0.0);
+                            
+                            if pos_r == max_pos {1.0} else {0.0}
+                        };
+                        handle_comp_for_wsent_and_rules(comp, &mut ckychart, &mut agenda, i, sentlen, ntcount, wsent, rules, &mut bins, &mut fullmatches, &mut stats)
                     }
                 }
-            }
-            TerminalMatcher::LCSRatioMatcher(alpha, beta) => {
-                for (i, wsent) in sent.iter().enumerate() {
-                    for (wrule, prets) in &word_to_preterminal {
+                TerminalMatcher::LCSRatioMatcher(alpha, beta) => {
+                    for (wrule, tagginglogprobs) in &word_to_preterminal {
                         let wrule_seq: Vec<_> = wrule.chars().collect();
                         let wsent_seq: Vec<_> = wsent.chars().collect();
                         let comp: f64 = (
@@ -298,13 +303,13 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_n
                                 (alpha * (wrule_seq.len() as f64) + (1.0-alpha) * (wsent_seq.len() as f64))
                             ).powf(beta);
                             
-                        if stats.logcompvalues {logcompvalue(comp, &wsent, &wrule, &mut fullmatches, &mut bins)};
+                        //if stats.logcompvalues {logcompvalue(comp, &wsent, &wrule, &mut fullmatches, &mut bins)};
                         if comp > 0.0 {
                             // p ̃(r(σ'))
                             //   = p(r) ⋅   (η ⋅ comp + (1-η) ⋅ δ(σ = σ'))   (now into log space...)
                             //   = p(r) + ln(η ⋅ comp + (1-η) ⋅ δ(σ = σ'))
                             let logprob_addendum: f64 = (stats.eta * comp + (if wrule == wsent {1.0-stats.eta} else {0.0})).ln();
-                            for &(nt, logprob) in prets {
+                            for &(nt, logprob) in tagginglogprobs {
                                 let addr = chart_adr(sentlen, ntcount, i, i + 1, nt);
                                 let logprob = logprob + logprob_addendum;
                                 if ckychart[addr].0 < logprob {
@@ -315,9 +320,7 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_n
                         }
                     }
                 }
-            }
-            TerminalMatcher::DiceMatcher(kappa, dualmono_pad, ref ngrams_to_rules) => {
-                for (i, wsent) in sent.iter().enumerate() {
+                TerminalMatcher::DiceMatcher(kappa, dualmono_pad, ref ngrams_to_rules) => {
                     // go through Vec<(HashSet<Vec<char>>, Vec<(String, NT, f64)>)>
                     for &(ref ngrams_rule, ref rules) in ngrams_to_rules {
                         // calculate dice coefficient
@@ -327,7 +330,7 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_n
                         let comp = 2.0 * inter / sum; // dice
                         
                         for &(ref wrule, nt, logprob) in rules {
-                            if stats.logcompvalues {logcompvalue(comp, &wsent, &wrule, &mut fullmatches, &mut bins)};
+                            //if stats.logcompvalues {logcompvalue(comp, &wsent, &wrule, &mut fullmatches, &mut bins)};
                             if comp > 0.0 {
                                 // p ̃(r(σ'))
                                 //   = p(r) ⋅   (η ⋅ comp + (1-η) ⋅ δ(σ = σ'))   (now into log space...)
@@ -342,11 +345,9 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_n
                             }
                         }
                     }
-                }
-            },
-            TerminalMatcher::LevenshteinMatcher(beta) => {
-                for (i, wsent) in sent.iter().enumerate() {
-                    for (wrule, prets) in &word_to_preterminal {
+                },
+                TerminalMatcher::LevenshteinMatcher(beta) => {
+                    for (wrule, tagginglogprobs) in &word_to_preterminal {
                         let comp: f64 = (1.0 - 
                                 (strsim::levenshtein(wsent, wrule) as f64)
                                 /
@@ -356,13 +357,13 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_n
                         assert!(comp <= 1.0);
                         assert!(comp >= 0.0);
                         
-                        if stats.logcompvalues {logcompvalue(comp, &wsent, &wrule, &mut fullmatches, &mut bins)};
+                        //if stats.logcompvalues {logcompvalue(comp, &wsent, &wrule, &mut fullmatches, &mut bins)};
                         if comp > 0.0 {
                             // p ̃(r(σ'))
                             //   = p(r) ⋅   (η ⋅ comp + (1-η) ⋅ δ(σ = σ'))   (now into log space...)
                             //   = p(r) + ln(η ⋅ comp + (1-η) ⋅ δ(σ = σ'))
                             let logprob_addendum: f64 = (stats.eta * comp + (if wrule == wsent {1.0-stats.eta} else {0.0})).ln();
-                            for &(nt, logprob) in prets {
+                            for &(nt, logprob) in tagginglogprobs {
                                 let addr = chart_adr(sentlen, ntcount, i, i + 1, nt);
                                 let logprob = logprob + logprob_addendum;
                                 if ckychart[addr].0 < logprob {
@@ -420,6 +421,7 @@ pub fn agenda_cky_parse<'a>(bin_rules: &'a HashMap<NT, HashMap<RHS, f64>>, bin_n
             }
         }
         stats.cky_terms += get_usertime() - t;
+        
         
         // Now do the lengthy agenda-working
         let t = get_usertime();
