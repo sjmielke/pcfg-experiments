@@ -206,24 +206,18 @@ pub fn embed_rules(
     
     // Init embedder
     let embdr_box = match &*stats.feature_structures {
-        "postagsonly" => TerminalMatcher::POSTagMatcher(POSTagEmbedder {
-            e_to_rules: vec![], bin_ntdict: bin_ntdict.clone(), nbesttags: stats.nbesttags
-        }),
-        "lcsratio" => TerminalMatcher::LCSRatioMatcher(LCSEmbedder {
-            e_to_rules: vec![], alpha: stats.alpha, beta: stats.beta
-        }),
+        "postagsonly" => {
+            let mut embdr = POSTagEmbedder { e_to_rules: vec![], bin_ntdict: bin_ntdict.clone(), nbesttags: stats.nbesttags };
+            embdr.build_e_to_rules(word_to_preterminal);
+            TerminalMatcher::POSTagMatcher(embdr)
+        },
+        "lcsratio" => {
+            let mut embdr = LCSEmbedder { e_to_rules: vec![], alpha: stats.alpha, beta: stats.beta };
+            embdr.build_e_to_rules(word_to_preterminal);
+            TerminalMatcher::LCSRatioMatcher(embdr)
+        },
         _ => unreachable!()
     };
-    
-    // // Build rule assocs
-    // let mut e_to_rules: HashMap<_, Vec<(String, NT, f64)>> = HashMap::new();
-    // for (word, pret_vect) in word_to_preterminal {
-    //     for &(nt, logprob) in pret_vect {
-    //         let e = embdr_box.0.embed_rule((word, nt, logprob));
-    //         e_to_rules.entry(e).or_insert_with(Vec::new).push((word.clone(), nt, logprob))
-    //     }
-    // }
-    // embdr_box.0.e_to_rules = e_to_rules.into_iter().collect();
     
     match &*stats.feature_structures {
         "postagsonly" => {
