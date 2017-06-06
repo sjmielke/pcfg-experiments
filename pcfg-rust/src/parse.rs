@@ -267,57 +267,20 @@ pub fn agenda_cky_parse<'a>(
                         }
                     }
                 },
-                TerminalMatcher::POSTagMatcher(ref feature_to_rules) => {
-                    // Extract the argmax POS tag
-                    let mut max_lp = ::std::f64::NEG_INFINITY;
-                    let mut max_pos: &str = "";
-                    let mut wsent_pos_desc_hashmap: HashMap<&str, f64> = HashMap::new();
-                    for &(ref p, lp) in wsent_pos_desc {
-                        wsent_pos_desc_hashmap.insert(p, lp);
-                        if lp >= max_lp {
-                            max_pos = p;
-                            max_lp = lp
-                        }
-                    }
+                TerminalMatcher::POSTagMatcher(ref embdr) => {
+                    let esent = embdr.embed_sent(wsent, wsent_pos_desc);
                     
-                    // go through HashMap<POSTag, Vec<(String, NT, f64)>>
-                    for (pos_r, rules) in feature_to_rules {
-                        let comp = if stats.nbesttags { //nbest
-                            wsent_pos_desc_hashmap.get(&pos_r[..]).unwrap_or(&::std::f64::NEG_INFINITY).exp()
-                        } else { //1best
-                            // Sanity checks
-                            assert_eq!(max_lp, 0.0);
-                            
-                            if pos_r == max_pos {1.0} else {0.0}
-                        };
+                    for &(ref erule, ref rules) in embdr.get_e_to_rules() {
+                        let comp = embdr.comp(erule, &esent);
                         handle_comp_for_wsent_and_rules(comp, &mut ckychart, &mut agenda, i, sentlen, ntcount, wsent, rules, &mut bins, &mut fullmatches, &mut stats)
                     }
                 }
-                TerminalMatcher::LCSRatioMatcher(alpha, beta) => {
-                    for (wrule, tagginglogprobs) in &word_to_preterminal {
-                        let wrule_seq: Vec<_> = wrule.chars().collect();
-                        let wsent_seq: Vec<_> = wsent.chars().collect();
-                        let comp: f64 = (
-                                (lcs_dyn_prog(wrule_seq.as_slice(), wsent_seq.as_slice()) as f64)
-                                /
-                                (alpha * (wrule_seq.len() as f64) + (1.0-alpha) * (wsent_seq.len() as f64))
-                            ).powf(beta);
-                            
-                        //if stats.logcompvalues {logcompvalue(comp, &wsent, &wrule, &mut fullmatches, &mut bins)};
-                        if comp > 0.0 {
-                            // p ̃(r(σ'))
-                            //   = p(r) ⋅   (η ⋅ comp + (1-η) ⋅ δ(σ = σ'))   (now into log space...)
-                            //   = p(r) + ln(η ⋅ comp + (1-η) ⋅ δ(σ = σ'))
-                            let logprob_addendum: f64 = (stats.eta * comp + (if wrule == wsent {1.0-stats.eta} else {0.0})).ln();
-                            for &(nt, logprob) in tagginglogprobs {
-                                let addr = chart_adr(sentlen, ntcount, i, i + 1, nt);
-                                let logprob = logprob + logprob_addendum;
-                                if ckychart[addr].0 < logprob {
-                                    ckychart[addr].0 = logprob;
-                                    agenda.push(AgendaItem(logprob, i, i+1, nt))
-                                }
-                            }
-                        }
+                TerminalMatcher::LCSRatioMatcher(ref embdr) => {
+                    let esent = embdr.embed_sent(wsent, wsent_pos_desc);
+                    
+                    for &(ref erule, ref rules) in embdr.get_e_to_rules() {
+                        let comp = embdr.comp(erule, &esent);
+                        handle_comp_for_wsent_and_rules(comp, &mut ckychart, &mut agenda, i, sentlen, ntcount, wsent, rules, &mut bins, &mut fullmatches, &mut stats)
                     }
                 }
                 TerminalMatcher::DiceMatcher(kappa, dualmono_pad, ref ngrams_to_rules) => {

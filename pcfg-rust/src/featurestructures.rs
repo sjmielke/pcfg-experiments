@@ -2,13 +2,101 @@ use std::collections::{HashMap, HashSet};
 
 use defs::*;
 
-#[derive(Debug, Clone)]
 pub enum TerminalMatcher {
-    POSTagMatcher (HashMap<POSTag, Vec<(String, NT, f64)>>),
-    LCSRatioMatcher (f64, f64), // alpha, beta
+    POSTagMatcher (POSTagEmbedder),
+    LCSRatioMatcher (LCSEmbedder),
     DiceMatcher (usize, bool, Vec<(HashSet<String>, Vec<(String, NT, f64)>)>), // kappa; dualmono_pad; assoc list from set of ngrams to list of rules
     LevenshteinMatcher(f64), // beta, TODO: trie for all for speed?
     ExactMatchOnly
+}
+
+pub trait IsEmbedding {
+    type emb_rule: ::std::cmp::Eq + ::std::hash::Hash;
+    type emb_sent;
+    
+    fn build_e_to_rules(&mut self, word_to_preterminal: &HashMap<String, Vec<(NT, f64)>>) {
+        let mut e_to_rules: HashMap<_, Vec<(String, NT, f64)>> = HashMap::new();
+        for (word, pret_vect) in word_to_preterminal {
+            for &(nt, logprob) in pret_vect {
+                let e = self.embed_rule(&(word, nt, logprob));
+                e_to_rules.entry(e).or_insert_with(Vec::new).push((word.clone(), nt, logprob))
+            }
+        }
+        *self.get_e_to_rules_mut() = e_to_rules.into_iter().collect()
+    }
+    fn get_e_to_rules(&self) -> &Vec<(Self::emb_rule, Vec<(String, NT, f64)>)>;
+    fn get_e_to_rules_mut(&mut self) -> &mut Vec<(Self::emb_rule, Vec<(String, NT, f64)>)>;
+    
+    fn comp(&self, erule: &Self::emb_rule, esent: &Self::emb_sent) -> f64;
+    fn embed_rule(&self, rule: &(&str, NT, f64)) -> Self::emb_rule;
+    fn embed_sent(&self, word: &str, posdesc: &Vec<(POSTag, f64)>) -> Self::emb_sent;
+}
+
+pub struct POSTagEmbedder {
+    e_to_rules: Vec<(POSTag, Vec<(String, NT, f64)>)>,
+    bin_ntdict: HashMap<NT, String>,
+    nbesttags: bool
+}
+impl IsEmbedding for POSTagEmbedder {
+    type emb_rule = POSTag;
+    type emb_sent = (POSTag, HashMap<POSTag, f64>); // argmax and scores
+    
+    fn get_e_to_rules(&self) -> &Vec<(Self::emb_rule, Vec<(String, NT, f64)>)> {&self.e_to_rules}
+    fn get_e_to_rules_mut(&mut self) -> &mut Vec<(Self::emb_rule, Vec<(String, NT, f64)>)> {&mut self.e_to_rules}
+    
+    fn comp(&self, erule: &POSTag, esent: &(POSTag, HashMap<POSTag, f64>)) -> f64 {
+        if self.nbesttags {
+            esent.1.get(erule).unwrap_or(&::std::f64::NEG_INFINITY).exp()
+        } else {
+            if *erule == esent.0 {1.0} else {0.0}
+        }
+    }
+    fn embed_rule(&self, rule: &(&str, NT, f64)) -> POSTag {
+        let &(_, nt, _) = rule;
+        self.bin_ntdict.get(&nt).unwrap().clone()
+    }
+    fn embed_sent(&self, _: &str, posdesc: &Vec<(POSTag, f64)>) -> (POSTag, HashMap<POSTag, f64>) {
+        let mut max_lp = ::std::f64::NEG_INFINITY;
+        let mut max_pos: &str = "";
+        let mut hm: HashMap<String, f64> = HashMap::new();
+        for &(ref p, lp) in posdesc {
+            if lp >= max_lp {
+                max_pos = p;
+                max_lp = lp
+            }
+            hm.insert(p.to_string(), lp);
+        }
+        assert_eq!(max_lp, 0.0);
+        (max_pos.to_string(), hm)
+    }
+}
+
+pub struct LCSEmbedder {
+    e_to_rules: Vec<(Vec<char>, Vec<(String, NT, f64)>)>,
+    alpha: f64,
+    beta: f64
+}
+impl IsEmbedding for LCSEmbedder {
+    type emb_rule = Vec<char>;
+    type emb_sent = Vec<char>;
+    
+    fn get_e_to_rules(&self) -> &Vec<(Self::emb_rule, Vec<(String, NT, f64)>)> {&self.e_to_rules}
+    fn get_e_to_rules_mut(&mut self) -> &mut Vec<(Self::emb_rule, Vec<(String, NT, f64)>)> {&mut self.e_to_rules}
+    
+    fn comp(&self, erule: &Vec<char>, esent: &Vec<char>) -> f64 {
+        (
+            (lcs_dyn_prog(erule.as_slice(), esent.as_slice()) as f64)
+            /
+            (self.alpha * (erule.len() as f64) + (1.0-self.alpha) * (esent.len() as f64))
+        ).powf(self.beta)
+    }
+    fn embed_rule(&self, rule: &(&str, NT, f64)) -> Vec<char> {
+        let &(w, _, _) = rule;
+        w.chars().collect()
+    }
+    fn embed_sent(&self, w: &str, _: &Vec<(POSTag, f64)>) -> Vec<char> {
+        w.chars().collect()
+    }
 }
 
 pub fn lcs_dyn_prog<T: Eq>(a: &[T], b: &[T]) -> usize {
@@ -112,21 +200,37 @@ pub fn embed_rules(
     stats: &PCFGParsingStatistics)
     -> TerminalMatcher {
     
+    if stats.feature_structures == "exactmatch" {
+        return TerminalMatcher::ExactMatchOnly
+    }
+    
+    // Init embedder
+    let embdr_box = match &*stats.feature_structures {
+        "postagsonly" => TerminalMatcher::POSTagMatcher(POSTagEmbedder {
+            e_to_rules: vec![], bin_ntdict: bin_ntdict.clone(), nbesttags: stats.nbesttags
+        }),
+        "lcsratio" => TerminalMatcher::LCSRatioMatcher(LCSEmbedder {
+            e_to_rules: vec![], alpha: stats.alpha, beta: stats.beta
+        }),
+        _ => unreachable!()
+    };
+    
+    // // Build rule assocs
+    // let mut e_to_rules: HashMap<_, Vec<(String, NT, f64)>> = HashMap::new();
+    // for (word, pret_vect) in word_to_preterminal {
+    //     for &(nt, logprob) in pret_vect {
+    //         let e = embdr_box.0.embed_rule((word, nt, logprob));
+    //         e_to_rules.entry(e).or_insert_with(Vec::new).push((word.clone(), nt, logprob))
+    //     }
+    // }
+    // embdr_box.0.e_to_rules = e_to_rules.into_iter().collect();
+    
     match &*stats.feature_structures {
-        "exactmatch" => {
-            TerminalMatcher::ExactMatchOnly
-        },
         "postagsonly" => {
-            let mut result = HashMap::new();
-            for (word, pret_vect) in word_to_preterminal {
-                for &(nt, logprob) in pret_vect {
-                    result.entry(bin_ntdict.get(&nt).unwrap().clone()).or_insert_with(Vec::new).push((word.clone(), nt, logprob));
-                }
-            }
-            TerminalMatcher::POSTagMatcher(result)
+            embdr_box
         }
         "lcsratio" => {
-            TerminalMatcher::LCSRatioMatcher(stats.alpha, stats.beta)
+            embdr_box
         }
         "dice" => {
             let mut result = Vec::new();
