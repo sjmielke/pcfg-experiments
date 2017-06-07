@@ -1,13 +1,14 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, BTreeSet};
 
 use defs::*;
+extern crate strsim;
 
 pub enum TerminalMatcher {
+    ExactMatcher (ExactMatchEmbedder),
     POSTagMatcher (POSTagEmbedder),
     LCSRatioMatcher (LCSEmbedder),
-    DiceMatcher (usize, bool, Vec<(HashSet<String>, Vec<(String, NT, f64)>)>), // kappa; dualmono_pad; assoc list from set of ngrams to list of rules
-    LevenshteinMatcher(f64), // beta, TODO: trie for all for speed?
-    ExactMatchOnly
+    DiceMatcher (NGramEmbedder),
+    LevenshteinMatcher(LevenshteinEmbedder)
 }
 
 pub trait IsEmbedding {
@@ -30,6 +31,28 @@ pub trait IsEmbedding {
     fn comp(&self, erule: &Self::emb_rule, esent: &Self::emb_sent) -> f64;
     fn embed_rule(&self, rule: &(&str, NT, f64)) -> Self::emb_rule;
     fn embed_sent(&self, word: &str, posdesc: &Vec<(POSTag, f64)>) -> Self::emb_sent;
+}
+
+pub struct ExactMatchEmbedder {
+    e_to_rules: Vec<(String, Vec<(String, NT, f64)>)>
+}
+impl IsEmbedding for ExactMatchEmbedder {
+    type emb_rule = String;
+    type emb_sent = String;
+    
+    fn get_e_to_rules(&self) -> &Vec<(Self::emb_rule, Vec<(String, NT, f64)>)> {&self.e_to_rules}
+    fn get_e_to_rules_mut(&mut self) -> &mut Vec<(Self::emb_rule, Vec<(String, NT, f64)>)> {&mut self.e_to_rules}
+    
+    fn comp(&self, erule: &String, esent: &String) -> f64 {
+        if erule == esent {1.0} else {0.0}
+    }
+    fn embed_rule(&self, rule: &(&str, NT, f64)) -> String {
+        let &(w, _, _) = rule;
+        w.to_string()
+    }
+    fn embed_sent(&self, w: &str, _: &Vec<(POSTag, f64)>) -> String {
+        w.to_string()
+    }
 }
 
 pub struct POSTagEmbedder {
@@ -99,6 +122,62 @@ impl IsEmbedding for LCSEmbedder {
     }
 }
 
+pub struct NGramEmbedder {
+    e_to_rules: Vec<(BTreeSet<String>, Vec<(String, NT, f64)>)>,
+    kappa: usize,
+    dualmono_pad: bool
+}
+impl IsEmbedding for NGramEmbedder {
+    type emb_rule = BTreeSet<String>;
+    type emb_sent = BTreeSet<String>;
+    
+    fn get_e_to_rules(&self) -> &Vec<(Self::emb_rule, Vec<(String, NT, f64)>)> {&self.e_to_rules}
+    fn get_e_to_rules_mut(&mut self) -> &mut Vec<(Self::emb_rule, Vec<(String, NT, f64)>)> {&mut self.e_to_rules}
+    
+    fn comp(&self, erule: &BTreeSet<String>, esent: &BTreeSet<String>) -> f64 {
+        let inter = esent.intersection(&erule).count() as f64;
+        let sum = (esent.len() + erule.len()) as f64;
+        2.0 * inter / sum // dice
+    }
+    fn embed_rule(&self, rule: &(&str, NT, f64)) -> BTreeSet<String> {
+        let &(w, _, _) = rule;
+        get_ngrams(self.kappa, self.dualmono_pad, w)
+    }
+    fn embed_sent(&self, w: &str, _: &Vec<(POSTag, f64)>) -> BTreeSet<String> {
+        get_ngrams(self.kappa, self.dualmono_pad, w)
+    }
+}
+
+pub struct LevenshteinEmbedder {
+    e_to_rules: Vec<((String, usize), Vec<(String, NT, f64)>)>,
+    beta: f64
+}
+impl IsEmbedding for LevenshteinEmbedder {
+    type emb_rule = (String, usize); // string and its length
+    type emb_sent = (String, usize); // string and its length
+    
+    fn get_e_to_rules(&self) -> &Vec<(Self::emb_rule, Vec<(String, NT, f64)>)> {&self.e_to_rules}
+    fn get_e_to_rules_mut(&mut self) -> &mut Vec<(Self::emb_rule, Vec<(String, NT, f64)>)> {&mut self.e_to_rules}
+    
+    fn comp(&self, erule: &(String, usize), esent: &(String, usize)) -> f64 {
+        let &(ref wrule, lrule) = erule;
+        let &(ref wsent, lsent) = esent;
+        (1.0 -
+            (strsim::levenshtein(wsent, wrule) as f64)
+            /
+            (::std::cmp::max(lrule, lsent) as f64)
+        ).powf(self.beta)
+    }
+    fn embed_rule(&self, rule: &(&str, NT, f64)) -> (String, usize) {
+        let &(w, _, _) = rule;
+        (w.to_string(), w.chars().count())
+    }
+    fn embed_sent(&self, w: &str, _: &Vec<(POSTag, f64)>) -> (String, usize) {
+        (w.to_string(), w.chars().count())
+    }
+}
+
+
 pub fn lcs_dyn_prog<T: Eq>(a: &[T], b: &[T]) -> usize {
     let mut table: Vec<Vec<usize>> = Vec::new();
     // Fill with 0s in first row/col
@@ -153,15 +232,15 @@ pub fn lcs_dyn_prog<T: Eq>(a: &[T], b: &[T]) -> usize {
 use std::sync::Mutex;
 lazy_static! {
     // Assuming kappa stays constant during program execution!
-    static ref NGRAMMAP: Mutex<HashMap<String,HashSet<String>>> = Mutex::new(HashMap::new());
+    static ref NGRAMMAP: Mutex<HashMap<String,BTreeSet<String>>> = Mutex::new(HashMap::new());
 }
 
-pub fn get_ngrams(kappa: usize, dualmono_pad: bool, word: &str) -> HashSet<String> {
+pub fn get_ngrams(kappa: usize, dualmono_pad: bool, word: &str) -> BTreeSet<String> {
     if let Some(r) = NGRAMMAP.lock().unwrap().get(word) {
         return r.clone()
     }
     
-    fn getgrams(s: String, kappa: usize) -> HashSet<String> {
+    fn getgrams(s: String, kappa: usize) -> BTreeSet<String> {
         s
             .chars()
             .collect::<Vec<_>>()
@@ -172,9 +251,9 @@ pub fn get_ngrams(kappa: usize, dualmono_pad: bool, word: &str) -> HashSet<Strin
     
     let sharpstring = "#".repeat(kappa - 1);
     
-    let r: HashSet<String> = if dualmono_pad {
-        let r1: HashSet<String> = getgrams(sharpstring.clone() + word, kappa);
-        let r2: HashSet<String> = getgrams(word.to_string() + &sharpstring, kappa);
+    let r: BTreeSet<String> = if dualmono_pad {
+        let r1: BTreeSet<String> = getgrams(sharpstring.clone() + word, kappa);
+        let r2: BTreeSet<String> = getgrams(word.to_string() + &sharpstring, kappa);
         
         r1.union(&r2).cloned().collect()
     } else {
@@ -200,12 +279,12 @@ pub fn embed_rules(
     stats: &PCFGParsingStatistics)
     -> TerminalMatcher {
     
-    if stats.feature_structures == "exactmatch" {
-        return TerminalMatcher::ExactMatchOnly
-    }
-    
-    // Init embedder
-    let embdr_box = match &*stats.feature_structures {
+    match &*stats.feature_structures {
+        "exactmatch" => {
+            let mut embdr = ExactMatchEmbedder { e_to_rules: vec![] };
+            embdr.build_e_to_rules(word_to_preterminal);
+            TerminalMatcher::ExactMatcher(embdr)
+        },
         "postagsonly" => {
             let mut embdr = POSTagEmbedder { e_to_rules: vec![], bin_ntdict: bin_ntdict.clone(), nbesttags: stats.nbesttags };
             embdr.build_e_to_rules(word_to_preterminal);
@@ -216,32 +295,16 @@ pub fn embed_rules(
             embdr.build_e_to_rules(word_to_preterminal);
             TerminalMatcher::LCSRatioMatcher(embdr)
         },
-        _ => unreachable!()
-    };
-    
-    match &*stats.feature_structures {
-        "postagsonly" => {
-            embdr_box
-        }
-        "lcsratio" => {
-            embdr_box
-        }
         "dice" => {
-            let mut result = Vec::new();
-            for (word, pret_vect) in word_to_preterminal {
-                let ngrams = get_ngrams(stats.kappa, stats.dualmono_pad, word);
-
-                let mut rules = Vec::new();
-                for &(nt, logprob) in pret_vect {
-                    rules.push((word.clone(), nt, logprob));
-                }
-                result.push((ngrams, rules));
-            }
-            TerminalMatcher::DiceMatcher(stats.kappa, stats.dualmono_pad, result)
-        }
+            let mut embdr = NGramEmbedder { e_to_rules: vec![], kappa: stats.kappa, dualmono_pad: stats.dualmono_pad };
+            embdr.build_e_to_rules(word_to_preterminal);
+            TerminalMatcher::DiceMatcher(embdr)
+        },
         "levenshtein" => {
-            TerminalMatcher::LevenshteinMatcher(stats.beta)
-        }
-        _ => {panic!("Incorrect feature structure / matching algorithm {} requested!", stats.feature_structures)}
+            let mut embdr = LevenshteinEmbedder { e_to_rules: vec![], beta: stats.beta };
+            embdr.build_e_to_rules(word_to_preterminal);
+            TerminalMatcher::LevenshteinMatcher(embdr)
+        },
+        _ => panic!("Incorrect feature structure / matching algorithm {} requested!", stats.feature_structures)
     }
 }
