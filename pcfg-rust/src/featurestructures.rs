@@ -1,4 +1,4 @@
-use std::collections::{HashMap, BTreeSet};
+use std::collections::{HashMap, BTreeMap, BTreeSet};
 
 use defs::*;
 extern crate strsim;
@@ -11,169 +11,189 @@ pub enum TerminalMatcher {
     LevenshteinMatcher(LevenshteinEmbedder)
 }
 
-pub trait IsEmbedding {
-    type emb_rule: ::std::cmp::Eq + ::std::hash::Hash;
-    type emb_sent;
+fn get_id<T: Clone + Eq + ::std::hash::Hash>(w: &T, id2e: &mut Vec<T>, e2id: &mut HashMap<T, usize>) -> usize {
+    if let Some(i) = e2id.get(w) {
+        return *i
+    }
     
+    let i = id2e.len();
+    id2e.push(w.clone());
+    e2id.insert(w.clone(), i);
+    i
+}
+
+pub trait IsEmbedding {
+    fn get_e_id_to_rules(&self) -> &Vec<(usize, Vec<(String, NT, f64)>)>;
+    fn get_e_id_to_rules_mut(&mut self) -> &mut Vec<(usize, Vec<(String, NT, f64)>)>;
     fn build_e_to_rules(&mut self, word_to_preterminal: &HashMap<String, Vec<(NT, f64)>>) {
-        let mut e_to_rules: HashMap<_, Vec<(String, NT, f64)>> = HashMap::new();
+        let mut e_id_to_rules: HashMap<_, Vec<(String, NT, f64)>> = HashMap::new();
         for (word, pret_vect) in word_to_preterminal {
             for &(nt, logprob) in pret_vect {
-                let e = self.embed_rule(&(word, nt, logprob));
-                e_to_rules.entry(e).or_insert_with(Vec::new).push((word.clone(), nt, logprob))
+                let e_id = self.embed_rule(&(word, nt, logprob));
+                e_id_to_rules.entry(e_id).or_insert_with(Vec::new).push((word.clone(), nt, logprob))
             }
         }
-        *self.get_e_to_rules_mut() = e_to_rules.into_iter().collect()
+        *self.get_e_id_to_rules_mut() = e_id_to_rules.into_iter().collect()
     }
-    fn get_e_to_rules(&self) -> &Vec<(Self::emb_rule, Vec<(String, NT, f64)>)>;
-    fn get_e_to_rules_mut(&mut self) -> &mut Vec<(Self::emb_rule, Vec<(String, NT, f64)>)>;
     
-    fn comp(&self, erule: &Self::emb_rule, esent: &Self::emb_sent) -> f64;
-    fn embed_rule(&self, rule: &(&str, NT, f64)) -> Self::emb_rule;
-    fn embed_sent(&self, word: &str, posdesc: &Vec<(POSTag, f64)>) -> Self::emb_sent;
+    fn comp(&self, erule: usize, esent: usize) -> f64;
+    fn embed_rule(&mut self, rule: &(&str, NT, f64)) -> usize;
+    fn embed_sent(&mut self, word: &str, posdesc: &Vec<(POSTag, f64)>) -> usize;
 }
 
 pub struct ExactEmbedder {
-    e_to_rules: Vec<(String, Vec<(String, NT, f64)>)>
+    e_id_to_rules: Vec<(usize, Vec<(String, NT, f64)>)>,
+    id2e: Vec<String>,
+    e2id: HashMap<String, usize>
 }
 impl IsEmbedding for ExactEmbedder {
-    type emb_rule = String;
-    type emb_sent = String;
+    fn get_e_id_to_rules(&self) -> &Vec<(usize, Vec<(String, NT, f64)>)> {&self.e_id_to_rules}
+    fn get_e_id_to_rules_mut(&mut self) -> &mut Vec<(usize, Vec<(String, NT, f64)>)> {&mut self.e_id_to_rules}
     
-    fn get_e_to_rules(&self) -> &Vec<(Self::emb_rule, Vec<(String, NT, f64)>)> {&self.e_to_rules}
-    fn get_e_to_rules_mut(&mut self) -> &mut Vec<(Self::emb_rule, Vec<(String, NT, f64)>)> {&mut self.e_to_rules}
-    
-    fn comp(&self, erule: &String, esent: &String) -> f64 {
-        if erule == esent {1.0} else {0.0}
+    fn comp(&self, erule: usize, esent: usize) -> f64 {
+        if self.id2e[erule] == self.id2e[esent] {1.0} else {0.0}
     }
-    fn embed_rule(&self, rule: &(&str, NT, f64)) -> String {
+    fn embed_rule(&mut self, rule: &(&str, NT, f64)) -> usize {
         let &(w, _, _) = rule;
-        w.to_string()
+        get_id(&w.to_string(), &mut self.id2e, &mut self.e2id)
     }
-    fn embed_sent(&self, w: &str, _: &Vec<(POSTag, f64)>) -> String {
-        w.to_string()
+    fn embed_sent(&mut self, w: &str, _: &Vec<(POSTag, f64)>) -> usize {
+        get_id(&w.to_string(), &mut self.id2e, &mut self.e2id)
     }
 }
 
 pub struct POSTagEmbedder {
-    e_to_rules: Vec<(POSTag, Vec<(String, NT, f64)>)>,
+    e_id_to_rules: Vec<(usize, Vec<(String, NT, f64)>)>,
+    id2e: Vec<(POSTag, BTreeMap<POSTag, LogProb>)>,
+    e2id: HashMap<(POSTag, BTreeMap<POSTag, LogProb>), usize>,
+    
     bin_ntdict: HashMap<NT, String>,
     nbesttags: bool
 }
 impl IsEmbedding for POSTagEmbedder {
-    type emb_rule = POSTag;
-    type emb_sent = (POSTag, HashMap<POSTag, f64>); // argmax and scores
+    fn get_e_id_to_rules(&self) -> &Vec<(usize, Vec<(String, NT, f64)>)> {&self.e_id_to_rules}
+    fn get_e_id_to_rules_mut(&mut self) -> &mut Vec<(usize, Vec<(String, NT, f64)>)> {&mut self.e_id_to_rules}
     
-    fn get_e_to_rules(&self) -> &Vec<(Self::emb_rule, Vec<(String, NT, f64)>)> {&self.e_to_rules}
-    fn get_e_to_rules_mut(&mut self) -> &mut Vec<(Self::emb_rule, Vec<(String, NT, f64)>)> {&mut self.e_to_rules}
-    
-    fn comp(&self, erule: &POSTag, esent: &(POSTag, HashMap<POSTag, f64>)) -> f64 {
+    fn comp(&self, erule: usize, esent: usize) -> f64 {
         if self.nbesttags {
-            esent.1.get(erule).unwrap_or(&::std::f64::NEG_INFINITY).exp()
+            let &LogProb(lp) = self.id2e[esent].1.get(&self.id2e[erule].0).unwrap_or(&LogProb(::std::f64::NEG_INFINITY));
+            lp.exp()
         } else {
-            if *erule == esent.0 {1.0} else {0.0}
+            if self.id2e[erule].0 == self.id2e[esent].0 {1.0} else {0.0}
         }
     }
-    fn embed_rule(&self, rule: &(&str, NT, f64)) -> POSTag {
+    fn embed_rule(&mut self, rule: &(&str, NT, f64)) -> usize {
         let &(_, nt, _) = rule;
-        self.bin_ntdict.get(&nt).unwrap().clone()
+        let tag = self.bin_ntdict.get(&nt).unwrap().clone();
+        let mut cpd: BTreeMap<String, LogProb> = BTreeMap::new();
+        cpd.insert(tag.clone(), LogProb(0.0));
+        let e = (tag, cpd);
+        get_id(&e, &mut self.id2e, &mut self.e2id)
     }
-    fn embed_sent(&self, _: &str, posdesc: &Vec<(POSTag, f64)>) -> (POSTag, HashMap<POSTag, f64>) {
+    fn embed_sent(&mut self, _: &str, posdesc: &Vec<(POSTag, f64)>) -> usize {
         let mut max_lp = ::std::f64::NEG_INFINITY;
         let mut max_pos: &str = "";
-        let mut hm: HashMap<String, f64> = HashMap::new();
+        let mut btm: BTreeMap<String, LogProb> = BTreeMap::new();
         for &(ref p, lp) in posdesc {
             if lp >= max_lp {
                 max_pos = p;
                 max_lp = lp
             }
-            hm.insert(p.to_string(), lp);
+            btm.insert(p.to_string(), LogProb(lp));
         }
         assert_eq!(max_lp, 0.0);
-        (max_pos.to_string(), hm)
+        let e = (max_pos.to_string(), btm);
+        get_id(&e, &mut self.id2e, &mut self.e2id)
     }
 }
 
 pub struct LCSEmbedder {
-    e_to_rules: Vec<(Vec<char>, Vec<(String, NT, f64)>)>,
+    e_id_to_rules: Vec<(usize, Vec<(String, NT, f64)>)>,
+    id2e: Vec<Vec<char>>,
+    e2id: HashMap<Vec<char>, usize>,
+    
     alpha: f64,
     beta: f64
 }
 impl IsEmbedding for LCSEmbedder {
-    type emb_rule = Vec<char>;
-    type emb_sent = Vec<char>;
+    fn get_e_id_to_rules(&self) -> &Vec<(usize, Vec<(String, NT, f64)>)> {&self.e_id_to_rules}
+    fn get_e_id_to_rules_mut(&mut self) -> &mut Vec<(usize, Vec<(String, NT, f64)>)> {&mut self.e_id_to_rules}
     
-    fn get_e_to_rules(&self) -> &Vec<(Self::emb_rule, Vec<(String, NT, f64)>)> {&self.e_to_rules}
-    fn get_e_to_rules_mut(&mut self) -> &mut Vec<(Self::emb_rule, Vec<(String, NT, f64)>)> {&mut self.e_to_rules}
-    
-    fn comp(&self, erule: &Vec<char>, esent: &Vec<char>) -> f64 {
+    fn comp(&self, erule: usize, esent: usize) -> f64 {
         (
-            (lcs_dyn_prog(erule.as_slice(), esent.as_slice()) as f64)
+            (lcs_dyn_prog(self.id2e[erule].as_slice(), self.id2e[esent].as_slice()) as f64)
             /
-            (self.alpha * (erule.len() as f64) + (1.0-self.alpha) * (esent.len() as f64))
+            (self.alpha * (self.id2e[erule].len() as f64)
+                + (1.0-self.alpha) * (self.id2e[esent].len() as f64))
         ).powf(self.beta)
     }
-    fn embed_rule(&self, rule: &(&str, NT, f64)) -> Vec<char> {
+    fn embed_rule(&mut self, rule: &(&str, NT, f64)) -> usize {
         let &(w, _, _) = rule;
-        w.chars().collect()
+        let e = w.chars().collect();
+        get_id(&e, &mut self.id2e, &mut self.e2id)
     }
-    fn embed_sent(&self, w: &str, _: &Vec<(POSTag, f64)>) -> Vec<char> {
-        w.chars().collect()
+    fn embed_sent(&mut self, w: &str, _: &Vec<(POSTag, f64)>) -> usize {
+        let e = w.chars().collect();
+        get_id(&e, &mut self.id2e, &mut self.e2id)
     }
 }
 
 pub struct NGramEmbedder {
-    e_to_rules: Vec<(BTreeSet<String>, Vec<(String, NT, f64)>)>,
+    e_id_to_rules: Vec<(usize, Vec<(String, NT, f64)>)>,
+    id2e: Vec<BTreeSet<String>>,
+    e2id: HashMap<BTreeSet<String>, usize>,
+    
     kappa: usize,
     dualmono_pad: bool
 }
 impl IsEmbedding for NGramEmbedder {
-    type emb_rule = BTreeSet<String>;
-    type emb_sent = BTreeSet<String>;
+    fn get_e_id_to_rules(&self) -> &Vec<(usize, Vec<(String, NT, f64)>)> {&self.e_id_to_rules}
+    fn get_e_id_to_rules_mut(&mut self) -> &mut Vec<(usize, Vec<(String, NT, f64)>)> {&mut self.e_id_to_rules}
     
-    fn get_e_to_rules(&self) -> &Vec<(Self::emb_rule, Vec<(String, NT, f64)>)> {&self.e_to_rules}
-    fn get_e_to_rules_mut(&mut self) -> &mut Vec<(Self::emb_rule, Vec<(String, NT, f64)>)> {&mut self.e_to_rules}
-    
-    fn comp(&self, erule: &BTreeSet<String>, esent: &BTreeSet<String>) -> f64 {
-        let inter = esent.intersection(&erule).count() as f64;
-        let sum = (esent.len() + erule.len()) as f64;
+    fn comp(&self, erule: usize, esent: usize) -> f64 {
+        let inter = self.id2e[esent].intersection(&self.id2e[erule]).count() as f64;
+        let sum = (self.id2e[esent].len() + self.id2e[erule].len()) as f64;
         2.0 * inter / sum // dice
     }
-    fn embed_rule(&self, rule: &(&str, NT, f64)) -> BTreeSet<String> {
+    fn embed_rule(&mut self, rule: &(&str, NT, f64)) -> usize {
         let &(w, _, _) = rule;
-        get_ngrams(self.kappa, self.dualmono_pad, w)
+        let e = get_ngrams(self.kappa, self.dualmono_pad, w);
+        get_id(&e, &mut self.id2e, &mut self.e2id)
     }
-    fn embed_sent(&self, w: &str, _: &Vec<(POSTag, f64)>) -> BTreeSet<String> {
-        get_ngrams(self.kappa, self.dualmono_pad, w)
+    fn embed_sent(&mut self, w: &str, _: &Vec<(POSTag, f64)>) -> usize {
+        let e = get_ngrams(self.kappa, self.dualmono_pad, w);
+        get_id(&e, &mut self.id2e, &mut self.e2id)
     }
 }
 
 pub struct LevenshteinEmbedder {
-    e_to_rules: Vec<((String, usize), Vec<(String, NT, f64)>)>,
+    e_id_to_rules: Vec<(usize, Vec<(String, NT, f64)>)>,
+    id2e: Vec<(String, usize)>,
+    e2id: HashMap<(String, usize), usize>,
+    
     beta: f64
 }
 impl IsEmbedding for LevenshteinEmbedder {
-    type emb_rule = (String, usize); // string and its length
-    type emb_sent = (String, usize); // string and its length
+    fn get_e_id_to_rules(&self) -> &Vec<(usize, Vec<(String, NT, f64)>)> {&self.e_id_to_rules}
+    fn get_e_id_to_rules_mut(&mut self) -> &mut Vec<(usize, Vec<(String, NT, f64)>)> {&mut self.e_id_to_rules}
     
-    fn get_e_to_rules(&self) -> &Vec<(Self::emb_rule, Vec<(String, NT, f64)>)> {&self.e_to_rules}
-    fn get_e_to_rules_mut(&mut self) -> &mut Vec<(Self::emb_rule, Vec<(String, NT, f64)>)> {&mut self.e_to_rules}
-    
-    fn comp(&self, erule: &(String, usize), esent: &(String, usize)) -> f64 {
-        let &(ref wrule, lrule) = erule;
-        let &(ref wsent, lsent) = esent;
+    fn comp(&self, erule: usize, esent: usize) -> f64 {
+        let (ref wrule, lrule) = self.id2e[erule];
+        let (ref wsent, lsent) = self.id2e[esent];
         (1.0 -
             (strsim::levenshtein(wsent, wrule) as f64)
             /
             (::std::cmp::max(lrule, lsent) as f64)
         ).powf(self.beta)
     }
-    fn embed_rule(&self, rule: &(&str, NT, f64)) -> (String, usize) {
+    fn embed_rule(&mut self, rule: &(&str, NT, f64)) -> usize {
         let &(w, _, _) = rule;
-        (w.to_string(), w.chars().count())
+        let e = (w.to_string(), w.chars().count());
+        get_id(&e, &mut self.id2e, &mut self.e2id)
     }
-    fn embed_sent(&self, w: &str, _: &Vec<(POSTag, f64)>) -> (String, usize) {
-        (w.to_string(), w.chars().count())
+    fn embed_sent(&mut self, w: &str, _: &Vec<(POSTag, f64)>) -> usize {
+        let e = (w.to_string(), w.chars().count());
+        get_id(&e, &mut self.id2e, &mut self.e2id)
     }
 }
 
@@ -278,27 +298,27 @@ pub fn embed_rules(
     
     match &*stats.feature_structures {
         "exactmatch" => {
-            let mut embdr = ExactEmbedder { e_to_rules: vec![] };
+            let mut embdr = ExactEmbedder { e_id_to_rules: Vec::new(), e2id: HashMap::new(), id2e: Vec::new() };
             embdr.build_e_to_rules(word_to_preterminal);
             TerminalMatcher::ExactMatcher(embdr)
         },
         "postagsonly" => {
-            let mut embdr = POSTagEmbedder { e_to_rules: vec![], bin_ntdict: bin_ntdict.clone(), nbesttags: stats.nbesttags };
+            let mut embdr = POSTagEmbedder { e_id_to_rules: Vec::new(), e2id: HashMap::new(), id2e: Vec::new(), bin_ntdict: bin_ntdict.clone(), nbesttags: stats.nbesttags };
             embdr.build_e_to_rules(word_to_preterminal);
             TerminalMatcher::POSTagMatcher(embdr)
         },
         "lcsratio" => {
-            let mut embdr = LCSEmbedder { e_to_rules: vec![], alpha: stats.alpha, beta: stats.beta };
+            let mut embdr = LCSEmbedder { e_id_to_rules: Vec::new(), e2id: HashMap::new(), id2e: Vec::new(), alpha: stats.alpha, beta: stats.beta };
             embdr.build_e_to_rules(word_to_preterminal);
             TerminalMatcher::LCSMatcher(embdr)
         },
         "dice" => {
-            let mut embdr = NGramEmbedder { e_to_rules: vec![], kappa: stats.kappa, dualmono_pad: stats.dualmono_pad };
+            let mut embdr = NGramEmbedder { e_id_to_rules: Vec::new(), e2id: HashMap::new(), id2e: Vec::new(), kappa: stats.kappa, dualmono_pad: stats.dualmono_pad };
             embdr.build_e_to_rules(word_to_preterminal);
             TerminalMatcher::NGramMatcher(embdr)
         },
         "levenshtein" => {
-            let mut embdr = LevenshteinEmbedder { e_to_rules: vec![], beta: stats.beta };
+            let mut embdr = LevenshteinEmbedder { e_id_to_rules: Vec::new(), e2id: HashMap::new(), id2e: Vec::new(), beta: stats.beta };
             embdr.build_e_to_rules(word_to_preterminal);
             TerminalMatcher::LevenshteinMatcher(embdr)
         },

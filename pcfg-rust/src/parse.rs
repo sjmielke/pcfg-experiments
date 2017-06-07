@@ -176,7 +176,7 @@ pub fn agenda_cky_parse<'a>(
     let ntcount = bin_rules.len();
     // Get the fat HashMaps...
     let (word_to_preterminal, all_preterminals, nt_chains, _, rhs_l_to_lhs, rhs_r_to_lhs) = preprocess_rules(bin_rules);
-    let terminal_matcher = embed_rules(&word_to_preterminal, bin_ntdict, stats);
+    let mut terminal_matcher = embed_rules(&word_to_preterminal, bin_ntdict, stats);
     // ...and convert some to Vecs for faster addressing
     let nt_chains_vec: Vec<Vec<(NT, f64)>> = hashmap_to_vec(nt_chains);
     let rhs_l_to_lhs_vec: Vec<Vec<(NT, NT, f64)>> = hashmap_to_vec(rhs_l_to_lhs);
@@ -215,7 +215,7 @@ pub fn agenda_cky_parse<'a>(
         // First do the good ones...
         
         fn handle_terminals<E: IsEmbedding> (
-            embdr: &E,
+            embdr: &mut E,
             ckychart: &mut Vec<(f64, usize, usize)>,
             agenda: &mut BinaryHeap<AgendaItem>,
             i: usize,
@@ -227,10 +227,10 @@ pub fn agenda_cky_parse<'a>(
             fullmatches: &mut usize,
             stats: &mut PCFGParsingStatistics)
         {
-            let esent = embdr.embed_sent(wsent, wsent_pos_desc);
+            let esent: usize = embdr.embed_sent(wsent, wsent_pos_desc);
             
-            for &(ref erule, ref rules) in embdr.get_e_to_rules() {
-                let comp = embdr.comp(erule, &esent);
+            for &(erule, ref rules) in embdr.get_e_id_to_rules() {
+                let comp = embdr.comp(erule, esent);
                 assert!(comp <= 1.0);
                 assert!(comp >= 0.0);
                 
@@ -264,19 +264,19 @@ pub fn agenda_cky_parse<'a>(
             }
             
             match terminal_matcher {
-                TerminalMatcher::ExactMatcher(ref embdr) => {
+                TerminalMatcher::ExactMatcher(ref mut embdr) => {
                     handle_terminals(embdr, &mut ckychart, &mut agenda, i, sentlen, ntcount, wsent, wsent_pos_desc, &mut bins, &mut fullmatches, &mut stats)
                 }
-                TerminalMatcher::POSTagMatcher(ref embdr) => {
+                TerminalMatcher::POSTagMatcher(ref mut embdr) => {
                     handle_terminals(embdr, &mut ckychart, &mut agenda, i, sentlen, ntcount, wsent, wsent_pos_desc, &mut bins, &mut fullmatches, &mut stats)
                 }
-                TerminalMatcher::LCSMatcher(ref embdr) => {
+                TerminalMatcher::LCSMatcher(ref mut embdr) => {
                     handle_terminals(embdr, &mut ckychart, &mut agenda, i, sentlen, ntcount, wsent, wsent_pos_desc, &mut bins, &mut fullmatches, &mut stats)
                 }
-                TerminalMatcher::NGramMatcher(ref embdr) => {
+                TerminalMatcher::NGramMatcher(ref mut embdr) => {
                     handle_terminals(embdr, &mut ckychart, &mut agenda, i, sentlen, ntcount, wsent, wsent_pos_desc, &mut bins, &mut fullmatches, &mut stats)
                 },
-                TerminalMatcher::LevenshteinMatcher(ref embdr) => {
+                TerminalMatcher::LevenshteinMatcher(ref mut embdr) => {
                     handle_terminals(embdr, &mut ckychart, &mut agenda, i, sentlen, ntcount, wsent, wsent_pos_desc, &mut bins, &mut fullmatches, &mut stats)
                 }
             }

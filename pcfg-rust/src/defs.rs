@@ -1,4 +1,78 @@
+// ######################################### Float hashing ########################################
+// (taken from https://github.com/reem/rust-ordered-float, MIT licensed)
+// (updated w/ integer_decode_f64 from rust-num: https://github.com/rust-num/num/blob/338e4799e675118789bffa95860ccef8a3abba38/traits/src/float.rs)
+
+use std::mem;
+use std::hash::{Hash, Hasher};
+
+// masks for the parts of the IEEE 754 float
+const SIGN_MASK: u64 = 0x8000000000000000u64;
+const EXP_MASK: u64 = 0x7ff0000000000000u64;
+const MAN_MASK: u64 = 0x000fffffffffffffu64;
+
+// canonical raw bit patterns (for hashing)
+const CANONICAL_NAN_BITS: u64 = 0x7ff8000000000000u64;
+const CANONICAL_ZERO_BITS: u64 = 0x0u64;
+
+#[inline]
+fn raw_double_bits(f: &f64) -> u64 {
+    if f.is_nan() {
+        return CANONICAL_NAN_BITS;
+    }
+
+    let bits: u64 = unsafe { mem::transmute(f) };
+    let sign: i8 = if bits >> 63 == 0 {
+        1
+    } else {
+        -1
+    };
+    let mut exponent: i16 = ((bits >> 52) & 0x7ff) as i16;
+    let mantissa = if exponent == 0 {
+        (bits & 0xfffffffffffff) << 1
+    } else {
+        (bits & 0xfffffffffffff) | 0x10000000000000
+    };
+    // Exponent bias + mantissa shift
+    exponent -= 1023 + 52;
+    let (man, exp, sign) = (mantissa, exponent, sign);
+    if man == 0 {
+        return CANONICAL_ZERO_BITS;
+    }
+
+    let exp_u64 = unsafe { mem::transmute::<i16, u16>(exp) } as u64;
+    let sign_u64 = if sign > 0 { 1u64 } else { 0u64 };
+    (man & MAN_MASK) | ((exp_u64 << 52) & EXP_MASK) | ((sign_u64 << 63) & SIGN_MASK)
+}
+
 // ######################################## Rules, trees ##########################################
+
+#[derive(Clone)]
+pub struct Probability(pub f64);
+impl PartialEq for Probability {
+    fn eq(&self, other: &Probability) -> bool {
+        self.0 == other.0
+    }
+}
+impl Eq for Probability {}
+impl Hash for Probability {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        raw_double_bits(&self.0).hash(state);
+    }
+}
+
+#[derive(Clone)]
+pub struct LogProb(pub f64);
+impl PartialEq for LogProb {
+    fn eq(&self, other: &LogProb) -> bool {
+        self.0 == other.0
+    }
+}
+impl Eq for LogProb {}
+impl Hash for LogProb {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        raw_double_bits(&self.0).hash(state);
+    }
+}
 
 pub type NT = usize;
 pub type POSTag = String;
