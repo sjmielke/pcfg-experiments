@@ -1,3 +1,5 @@
+#![feature(conservative_impl_trait)]
+
 use std::collections::HashMap;
 use std::f64; // log and exp
 use std::process::Command;

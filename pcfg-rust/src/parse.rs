@@ -214,36 +214,44 @@ pub fn agenda_cky_parse<'a>(
         let uniform_oov_prob = stats.uniform_oov_prob;
         // First do the good ones...
         
-        fn handle_comp_for_wsent_and_rules (
-            comp: f64,
+        fn handle_terminals<E: IsEmbedding> (
+            embdr: &E,
             ckychart: &mut Vec<(f64, usize, usize)>,
             agenda: &mut BinaryHeap<AgendaItem>,
             i: usize,
             sentlen: usize,
             ntcount: usize,
             wsent: &str,
-            rules: &Vec<(String, NT, f64)>,
+            wsent_pos_desc: &Vec<(String, f64)>,
             bins: &mut Vec<usize>,
             fullmatches: &mut usize,
             stats: &mut PCFGParsingStatistics)
         {
-            for &(ref wrule, nt, logprob) in rules {
-                if stats.logcompvalues {
-                    bins[bin(comp)] += 1;
-                    if wsent == wrule {*fullmatches += 1}
-                };
+            let esent = embdr.embed_sent(wsent, wsent_pos_desc);
+            
+            for &(ref erule, ref rules) in embdr.get_e_to_rules() {
+                let comp = embdr.comp(erule, &esent);
+                assert!(comp <= 1.0);
+                assert!(comp >= 0.0);
                 
-                let lp_add = if wrule == wsent {
-                    (stats.eta * comp + (1.0-stats.eta)).ln()
-                } else {
-                    (stats.eta * comp                  ).ln()
-                };
-                if lp_add == ::std::f64::NEG_INFINITY {continue};
-                let addr = chart_adr(sentlen, ntcount, i, i + 1, nt);
-                let logprob = logprob + lp_add;
-                if ckychart[addr].0 < logprob {
-                    ckychart[addr].0 = logprob;
-                    agenda.push(AgendaItem(logprob, i, i+1, nt))
+                for &(ref wrule, nt, logprob) in rules {
+                    if stats.logcompvalues {
+                        bins[bin(comp)] += 1;
+                        if wsent == wrule {*fullmatches += 1}
+                    };
+                    
+                    let lp_add = if wrule == wsent {
+                        (stats.eta * comp + (1.0-stats.eta)).ln()
+                    } else {
+                        (stats.eta * comp                  ).ln()
+                    };
+                    if lp_add == ::std::f64::NEG_INFINITY {continue};
+                    let addr = chart_adr(sentlen, ntcount, i, i + 1, nt);
+                    let logprob = logprob + lp_add;
+                    if ckychart[addr].0 < logprob {
+                        ckychart[addr].0 = logprob;
+                        agenda.push(AgendaItem(logprob, i, i+1, nt))
+                    }
                 }
             }
         }
@@ -257,54 +265,19 @@ pub fn agenda_cky_parse<'a>(
             
             match terminal_matcher {
                 TerminalMatcher::ExactMatcher(ref embdr) => {
-                    let esent = embdr.embed_sent(wsent, wsent_pos_desc);
-                    
-                    for &(ref erule, ref rules) in embdr.get_e_to_rules() {
-                        let comp = embdr.comp(erule, &esent);
-                        assert!(comp <= 1.0);
-                        assert!(comp >= 0.0);
-                        handle_comp_for_wsent_and_rules(comp, &mut ckychart, &mut agenda, i, sentlen, ntcount, wsent, rules, &mut bins, &mut fullmatches, &mut stats)
-                    }
+                    handle_terminals(embdr, &mut ckychart, &mut agenda, i, sentlen, ntcount, wsent, wsent_pos_desc, &mut bins, &mut fullmatches, &mut stats)
                 }
                 TerminalMatcher::POSTagMatcher(ref embdr) => {
-                    let esent = embdr.embed_sent(wsent, wsent_pos_desc);
-                    
-                    for &(ref erule, ref rules) in embdr.get_e_to_rules() {
-                        let comp = embdr.comp(erule, &esent);
-                        assert!(comp <= 1.0);
-                        assert!(comp >= 0.0);
-                        handle_comp_for_wsent_and_rules(comp, &mut ckychart, &mut agenda, i, sentlen, ntcount, wsent, rules, &mut bins, &mut fullmatches, &mut stats)
-                    }
+                    handle_terminals(embdr, &mut ckychart, &mut agenda, i, sentlen, ntcount, wsent, wsent_pos_desc, &mut bins, &mut fullmatches, &mut stats)
                 }
-                TerminalMatcher::LCSRatioMatcher(ref embdr) => {
-                    let esent = embdr.embed_sent(wsent, wsent_pos_desc);
-                    
-                    for &(ref erule, ref rules) in embdr.get_e_to_rules() {
-                        let comp = embdr.comp(erule, &esent);
-                        assert!(comp <= 1.0);
-                        assert!(comp >= 0.0);
-                        handle_comp_for_wsent_and_rules(comp, &mut ckychart, &mut agenda, i, sentlen, ntcount, wsent, rules, &mut bins, &mut fullmatches, &mut stats)
-                    }
+                TerminalMatcher::LCSMatcher(ref embdr) => {
+                    handle_terminals(embdr, &mut ckychart, &mut agenda, i, sentlen, ntcount, wsent, wsent_pos_desc, &mut bins, &mut fullmatches, &mut stats)
                 }
-                TerminalMatcher::DiceMatcher(ref embdr) => {
-                    let esent = embdr.embed_sent(wsent, wsent_pos_desc);
-                    
-                    for &(ref erule, ref rules) in embdr.get_e_to_rules() {
-                        let comp = embdr.comp(erule, &esent);
-                        assert!(comp <= 1.0);
-                        assert!(comp >= 0.0);
-                        handle_comp_for_wsent_and_rules(comp, &mut ckychart, &mut agenda, i, sentlen, ntcount, wsent, rules, &mut bins, &mut fullmatches, &mut stats)
-                    }
+                TerminalMatcher::NGramMatcher(ref embdr) => {
+                    handle_terminals(embdr, &mut ckychart, &mut agenda, i, sentlen, ntcount, wsent, wsent_pos_desc, &mut bins, &mut fullmatches, &mut stats)
                 },
                 TerminalMatcher::LevenshteinMatcher(ref embdr) => {
-                    let esent = embdr.embed_sent(wsent, wsent_pos_desc);
-                    
-                    for &(ref erule, ref rules) in embdr.get_e_to_rules() {
-                        let comp = embdr.comp(erule, &esent);
-                        assert!(comp <= 1.0);
-                        assert!(comp >= 0.0);
-                        handle_comp_for_wsent_and_rules(comp, &mut ckychart, &mut agenda, i, sentlen, ntcount, wsent, rules, &mut bins, &mut fullmatches, &mut stats)
-                    }
+                    handle_terminals(embdr, &mut ckychart, &mut agenda, i, sentlen, ntcount, wsent, wsent_pos_desc, &mut bins, &mut fullmatches, &mut stats)
                 }
             }
         }

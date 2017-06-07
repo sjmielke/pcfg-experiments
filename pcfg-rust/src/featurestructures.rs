@@ -4,10 +4,10 @@ use defs::*;
 extern crate strsim;
 
 pub enum TerminalMatcher {
-    ExactMatcher (ExactMatchEmbedder),
+    ExactMatcher (ExactEmbedder),
     POSTagMatcher (POSTagEmbedder),
-    LCSRatioMatcher (LCSEmbedder),
-    DiceMatcher (NGramEmbedder),
+    LCSMatcher (LCSEmbedder),
+    NGramMatcher (NGramEmbedder),
     LevenshteinMatcher(LevenshteinEmbedder)
 }
 
@@ -33,10 +33,10 @@ pub trait IsEmbedding {
     fn embed_sent(&self, word: &str, posdesc: &Vec<(POSTag, f64)>) -> Self::emb_sent;
 }
 
-pub struct ExactMatchEmbedder {
+pub struct ExactEmbedder {
     e_to_rules: Vec<(String, Vec<(String, NT, f64)>)>
 }
-impl IsEmbedding for ExactMatchEmbedder {
+impl IsEmbedding for ExactEmbedder {
     type emb_rule = String;
     type emb_sent = String;
     
@@ -270,9 +270,6 @@ pub fn get_ngrams(kappa: usize, dualmono_pad: bool, word: &str) -> BTreeSet<Stri
     r
 }
 
-// Returns a HashMap: F -> P(R), i.e. gives all rules deriving a certain feature structure.
-// This way terminals are only compared with the number of unique feature structures
-// and not with every rule itself.
 pub fn embed_rules(
     word_to_preterminal: &HashMap<String, Vec<(NT, f64)>>,
     bin_ntdict: &HashMap<NT, String>,
@@ -281,7 +278,7 @@ pub fn embed_rules(
     
     match &*stats.feature_structures {
         "exactmatch" => {
-            let mut embdr = ExactMatchEmbedder { e_to_rules: vec![] };
+            let mut embdr = ExactEmbedder { e_to_rules: vec![] };
             embdr.build_e_to_rules(word_to_preterminal);
             TerminalMatcher::ExactMatcher(embdr)
         },
@@ -293,12 +290,12 @@ pub fn embed_rules(
         "lcsratio" => {
             let mut embdr = LCSEmbedder { e_to_rules: vec![], alpha: stats.alpha, beta: stats.beta };
             embdr.build_e_to_rules(word_to_preterminal);
-            TerminalMatcher::LCSRatioMatcher(embdr)
+            TerminalMatcher::LCSMatcher(embdr)
         },
         "dice" => {
             let mut embdr = NGramEmbedder { e_to_rules: vec![], kappa: stats.kappa, dualmono_pad: stats.dualmono_pad };
             embdr.build_e_to_rules(word_to_preterminal);
-            TerminalMatcher::DiceMatcher(embdr)
+            TerminalMatcher::NGramMatcher(embdr)
         },
         "levenshtein" => {
             let mut embdr = LevenshteinEmbedder { e_to_rules: vec![], beta: stats.beta };
