@@ -112,8 +112,7 @@ pub struct LCSEmbedder {
     id2e: Vec<Vec<char>>,
     e2id: HashMap<Vec<char>, usize>,
     
-    alpha: f64,
-    beta: f64
+    alpha: f64
 }
 impl LCSEmbedder {
     fn lcs_dyn_prog<T: Eq>(a: &[T], b: &[T]) -> usize {
@@ -163,12 +162,10 @@ impl IsEmbedding for LCSEmbedder {
     fn get_e_id_to_rules_mut(&mut self) -> &mut Vec<(usize, Vec<(String, NT, f64)>)> {&mut self.e_id_to_rules}
     
     fn comp(&self, erule: usize, esent: usize) -> f64 {
-        (
-            (LCSEmbedder::lcs_dyn_prog(self.id2e[erule].as_slice(), self.id2e[esent].as_slice()) as f64)
-            /
-            (self.alpha * (self.id2e[erule].len() as f64)
-                + (1.0-self.alpha) * (self.id2e[esent].len() as f64))
-        ).powf(self.beta)
+        (LCSEmbedder::lcs_dyn_prog(self.id2e[erule].as_slice(), self.id2e[esent].as_slice()) as f64)
+        /
+        (self.alpha * (self.id2e[erule].len() as f64)
+            + (1.0-self.alpha) * (self.id2e[esent].len() as f64))
     }
     fn embed_rule(&mut self, rule: &(&str, NT, f64)) -> usize {
         let &(w, _, _) = rule;
@@ -245,9 +242,7 @@ impl IsEmbedding for NGramEmbedder {
 pub struct LevenshteinEmbedder {
     e_id_to_rules: Vec<(usize, Vec<(String, NT, f64)>)>,
     id2e: Vec<(String, usize)>,
-    e2id: HashMap<(String, usize), usize>,
-    
-    beta: f64
+    e2id: HashMap<(String, usize), usize>
 }
 impl IsEmbedding for LevenshteinEmbedder {
     fn get_e_id_to_rules(&self) -> &Vec<(usize, Vec<(String, NT, f64)>)> {&self.e_id_to_rules}
@@ -260,7 +255,7 @@ impl IsEmbedding for LevenshteinEmbedder {
             (strsim::levenshtein(wsent, wrule) as f64)
             /
             (::std::cmp::max(lrule, lsent) as f64)
-        ).powf(self.beta)
+        )
     }
     fn embed_rule(&mut self, rule: &(&str, NT, f64)) -> usize {
         let &(w, _, _) = rule;
@@ -291,7 +286,7 @@ pub fn embed_rules(
             TerminalMatcher::POSTagMatcher(embdr)
         },
         "lcsratio" => {
-            let mut embdr = LCSEmbedder { e_id_to_rules: Vec::new(), e2id: HashMap::new(), id2e: Vec::new(), alpha: stats.alpha, beta: stats.beta };
+            let mut embdr = LCSEmbedder { e_id_to_rules: Vec::new(), e2id: HashMap::new(), id2e: Vec::new(), alpha: stats.alpha };
             embdr.build_e_to_rules(word_to_preterminal);
             TerminalMatcher::LCSMatcher(embdr)
         },
@@ -301,7 +296,7 @@ pub fn embed_rules(
             TerminalMatcher::NGramMatcher(embdr)
         },
         "levenshtein" => {
-            let mut embdr = LevenshteinEmbedder { e_id_to_rules: Vec::new(), e2id: HashMap::new(), id2e: Vec::new(), beta: stats.beta };
+            let mut embdr = LevenshteinEmbedder { e_id_to_rules: Vec::new(), e2id: HashMap::new(), id2e: Vec::new() };
             embdr.build_e_to_rules(word_to_preterminal);
             TerminalMatcher::LevenshteinMatcher(embdr)
         },

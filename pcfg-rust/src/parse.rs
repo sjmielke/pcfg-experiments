@@ -241,11 +241,12 @@ pub fn agenda_cky_parse<'a>(
                     };
                     
                     let lp_add = if wrule == wsent {
-                        (stats.eta * comp + (1.0-stats.eta)).ln()
+                        (stats.eta * comp.powf(stats.beta) + (1.0-stats.eta)).ln()
                     } else {
-                        (stats.eta * comp                  ).ln()
+                        (stats.eta * comp.powf(stats.beta)                  ).ln()
                     };
                     if lp_add == ::std::f64::NEG_INFINITY {continue};
+                    
                     let addr = chart_adr(sentlen, ntcount, i, i + 1, nt);
                     let logprob = logprob + lp_add;
                     if ckychart[addr].0 < logprob {
