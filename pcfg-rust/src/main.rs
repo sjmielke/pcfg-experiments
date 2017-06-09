@@ -9,10 +9,6 @@ use std::fs::File;
 use std::io::Write;
 use tempdir::TempDir;
 
-// Caching for feature structures
-#[macro_use]
-extern crate lazy_static;
-
 extern crate argparse;
 use argparse::{ArgumentParser, Store, StoreTrue};
 

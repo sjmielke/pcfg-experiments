@@ -115,13 +115,56 @@ pub struct LCSEmbedder {
     alpha: f64,
     beta: f64
 }
+impl LCSEmbedder {
+    fn lcs_dyn_prog<T: Eq>(a: &[T], b: &[T]) -> usize {
+        let mut table: Vec<Vec<usize>> = Vec::new();
+        // Fill with 0s in first row/col
+        // table_ai=0, table_bi ∈ {0..b.len()}
+        let mut v = Vec::new();
+        for _ in 0..b.len() + 1 {
+            v.push(0)
+        }
+        table.push(v);
+        // table_bi=0, table)ai ∈ {1..a.len()} (already did ai=0)
+        for _ in 1..a.len() + 1 {
+            let mut v = Vec::new();
+            v.push(0);
+            table.push(v)
+        }
+        // Complete table bottom-up
+        for table_ai in 1..a.len() + 1 {
+            for table_bi in 1..b.len() + 1 {
+                let byte_ai = table_ai - 1;
+                let byte_bi = table_bi - 1;
+                // get longest suffix of a[0..ai] and b[0..bi]
+                if a[byte_ai] != b[byte_bi] {
+                    table[table_ai].push(0)
+                } else {
+                    let oldval = table[table_ai-1][table_bi-1];
+                    table[table_ai].push(1 + oldval)
+                }
+            }
+        }
+        // max entry is the length of the LCS
+        let mut max = 0;
+        for table_ai in 1..a.len() + 1 {
+            for table_bi in 1..b.len() + 1 {
+                if table[table_ai][table_bi] > max {
+                    max = table[table_ai][table_bi]
+                }
+            }
+        }
+        
+        max
+    }
+}
 impl IsEmbedding for LCSEmbedder {
     fn get_e_id_to_rules(&self) -> &Vec<(usize, Vec<(String, NT, f64)>)> {&self.e_id_to_rules}
     fn get_e_id_to_rules_mut(&mut self) -> &mut Vec<(usize, Vec<(String, NT, f64)>)> {&mut self.e_id_to_rules}
     
     fn comp(&self, erule: usize, esent: usize) -> f64 {
         (
-            (lcs_dyn_prog(self.id2e[erule].as_slice(), self.id2e[esent].as_slice()) as f64)
+            (LCSEmbedder::lcs_dyn_prog(self.id2e[erule].as_slice(), self.id2e[esent].as_slice()) as f64)
             /
             (self.alpha * (self.id2e[erule].len() as f64)
                 + (1.0-self.alpha) * (self.id2e[esent].len() as f64))
@@ -144,7 +187,42 @@ pub struct NGramEmbedder {
     e2id: HashMap<BTreeSet<String>, usize>,
     
     kappa: usize,
-    dualmono_pad: bool
+    dualmono_pad: bool,
+    
+    ngram_cache: HashMap<String, usize>
+}
+impl NGramEmbedder {
+    fn get_ngrams_index(&mut self, word: &str) -> usize {
+        if let Some(i) = self.ngram_cache.get(word) {
+            return *i
+        }
+        
+        fn getgrams(s: String, kappa: usize) -> BTreeSet<String> {
+            s
+                .chars()
+                .collect::<Vec<_>>()
+                .windows(kappa)
+                .map(|w| w.iter().cloned().collect())
+                .collect()
+        }
+        
+        let sharpstring = "#".repeat(self.kappa - 1);
+        
+        let r: BTreeSet<String> = if self.dualmono_pad {
+            let r1: BTreeSet<String> = getgrams(sharpstring.clone() + word, self.kappa);
+            let r2: BTreeSet<String> = getgrams(word.to_string() + &sharpstring, self.kappa);
+            
+            r1.union(&r2).cloned().collect()
+        } else {
+            getgrams(sharpstring.clone() + word + &sharpstring, self.kappa)
+        };
+        
+        let i = get_id(&r, &mut self.id2e, &mut self.e2id);
+        
+        self.ngram_cache.insert(word.to_string(), i);
+        
+        i
+    }
 }
 impl IsEmbedding for NGramEmbedder {
     fn get_e_id_to_rules(&self) -> &Vec<(usize, Vec<(String, NT, f64)>)> {&self.e_id_to_rules}
@@ -157,12 +235,10 @@ impl IsEmbedding for NGramEmbedder {
     }
     fn embed_rule(&mut self, rule: &(&str, NT, f64)) -> usize {
         let &(w, _, _) = rule;
-        let e = get_ngrams(self.kappa, self.dualmono_pad, w);
-        get_id(&e, &mut self.id2e, &mut self.e2id)
+        self.get_ngrams_index(w)
     }
     fn embed_sent(&mut self, w: &str, _: &Vec<(POSTag, f64)>) -> usize {
-        let e = get_ngrams(self.kappa, self.dualmono_pad, w);
-        get_id(&e, &mut self.id2e, &mut self.e2id)
+        self.get_ngrams_index(w)
     }
 }
 
@@ -197,99 +273,6 @@ impl IsEmbedding for LevenshteinEmbedder {
     }
 }
 
-
-pub fn lcs_dyn_prog<T: Eq>(a: &[T], b: &[T]) -> usize {
-    let mut table: Vec<Vec<usize>> = Vec::new();
-    // Fill with 0s in first row/col
-    // table_ai=0, table_bi ∈ {0..b.len()}
-    let mut v = Vec::new();
-    for _ in 0..b.len() + 1 {
-        v.push(0)
-    }
-    table.push(v);
-    // table_bi=0, table)ai ∈ {1..a.len()} (already did ai=0)
-    for _ in 1..a.len() + 1 {
-        let mut v = Vec::new();
-        v.push(0);
-        table.push(v)
-    }
-    // Complete table bottom-up
-    for table_ai in 1..a.len() + 1 {
-        for table_bi in 1..b.len() + 1 {
-            let byte_ai = table_ai - 1;
-            let byte_bi = table_bi - 1;
-            // get longest suffix of a[0..ai] and b[0..bi]
-            if a[byte_ai] != b[byte_bi] {
-                table[table_ai].push(0)
-            } else {
-                let oldval = table[table_ai-1][table_bi-1];
-                table[table_ai].push(1 + oldval)
-            }
-        }
-    }
-    // max entry is the length of the LCS
-    let mut max = 0;
-    for table_ai in 1..a.len() + 1 {
-        for table_bi in 1..b.len() + 1 {
-            if table[table_ai][table_bi] > max {
-                max = table[table_ai][table_bi]
-            }
-        }
-    }
-    
-    // print!("\n");
-    // for ai in 0..a.len() + 1 {
-    //     for bi in 0..b.len() + 1 {
-    //         print!("{} ", table[ai][bi])
-    //     }
-    //     print!("\n")
-    // }
-    
-    max
-}
-
-
-use std::sync::Mutex;
-lazy_static! {
-    // Assuming kappa stays constant during program execution!
-    static ref NGRAMMAP: Mutex<HashMap<String,BTreeSet<String>>> = Mutex::new(HashMap::new());
-}
-
-pub fn get_ngrams(kappa: usize, dualmono_pad: bool, word: &str) -> BTreeSet<String> {
-    if let Some(r) = NGRAMMAP.lock().unwrap().get(word) {
-        return r.clone()
-    }
-    
-    fn getgrams(s: String, kappa: usize) -> BTreeSet<String> {
-        s
-            .chars()
-            .collect::<Vec<_>>()
-            .windows(kappa)
-            .map(|w| w.iter().cloned().collect())
-            .collect()
-    }
-    
-    let sharpstring = "#".repeat(kappa - 1);
-    
-    let r: BTreeSet<String> = if dualmono_pad {
-        let r1: BTreeSet<String> = getgrams(sharpstring.clone() + word, kappa);
-        let r2: BTreeSet<String> = getgrams(word.to_string() + &sharpstring, kappa);
-        
-        r1.union(&r2).cloned().collect()
-    } else {
-        getgrams(sharpstring.clone() + word + &sharpstring, kappa)
-    };
-    
-    // println!("{}:", word);
-    // for g in &r {
-    //     println!("\t{:?}", g);
-    // }
-    
-    NGRAMMAP.lock().unwrap().insert(word.to_string(), r.clone());
-    
-    r
-}
-
 pub fn embed_rules(
     word_to_preterminal: &HashMap<String, Vec<(NT, f64)>>,
     bin_ntdict: &HashMap<NT, String>,
@@ -313,7 +296,7 @@ pub fn embed_rules(
             TerminalMatcher::LCSMatcher(embdr)
         },
         "dice" => {
-            let mut embdr = NGramEmbedder { e_id_to_rules: Vec::new(), e2id: HashMap::new(), id2e: Vec::new(), kappa: stats.kappa, dualmono_pad: stats.dualmono_pad };
+            let mut embdr = NGramEmbedder { e_id_to_rules: Vec::new(), e2id: HashMap::new(), id2e: Vec::new(), kappa: stats.kappa, dualmono_pad: stats.dualmono_pad, ngram_cache: HashMap::new() };
             embdr.build_e_to_rules(word_to_preterminal);
             TerminalMatcher::NGramMatcher(embdr)
         },
