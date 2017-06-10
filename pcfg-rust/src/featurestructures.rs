@@ -290,7 +290,7 @@ pub fn embed_rules(
             embdr.build_e_to_rules(word_to_preterminal);
             TerminalMatcher::LCSMatcher(embdr)
         },
-        "dice" => {
+        "ngrams" => {
             let mut embdr = NGramEmbedder { e_id_to_rules: Vec::new(), e2id: HashMap::new(), id2e: Vec::new(), kappa: stats.kappa, dualmono_pad: stats.dualmono_pad, ngram_cache: HashMap::new() };
             embdr.build_e_to_rules(word_to_preterminal);
             TerminalMatcher::NGramMatcher(embdr)
