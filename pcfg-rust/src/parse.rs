@@ -231,8 +231,8 @@ pub fn agenda_cky_parse<'a>(
             
             for &(erule, ref rules) in embdr.get_e_id_to_rules() {
                 let comp = embdr.comp(erule, esent);
-                assert!(comp <= 1.0);
-                assert!(comp >= 0.0);
+                assert!(comp - ::std::f64::EPSILON <= 1.0);
+                assert!(comp + ::std::f64::EPSILON >= 0.0);
                 
                 for &(ref wrule, nt, logprob) in rules {
                     if stats.logcompvalues {

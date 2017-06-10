@@ -162,10 +162,13 @@ impl IsEmbedding for LCSEmbedder {
     fn get_e_id_to_rules_mut(&mut self) -> &mut Vec<(usize, Vec<(String, NT, f64)>)> {&mut self.e_id_to_rules}
     
     fn comp(&self, erule: usize, esent: usize) -> f64 {
-        (LCSEmbedder::lcs_dyn_prog(self.id2e[erule].as_slice(), self.id2e[esent].as_slice()) as f64)
-        /
-        (self.alpha * (self.id2e[erule].len() as f64)
-            + (1.0-self.alpha) * (self.id2e[esent].len() as f64))
+        let lrule: f64 = self.id2e[erule].len() as f64;
+        let lsent: f64 = self.id2e[esent].len() as f64;
+        let lcslen: f64 = LCSEmbedder::lcs_dyn_prog(self.id2e[erule].as_slice(), self.id2e[esent].as_slice()) as f64;
+        let w_avg: f64 = self.alpha * lrule + (1.0-self.alpha) * lsent;
+        // lcslen <= min{lrule, lsent}
+        // min{lrule, lsent} <= w_avg{lrule, lsent}
+        lcslen / w_avg
     }
     fn embed_rule(&mut self, rule: &(&str, NT, f64)) -> usize {
         let &(w, _, _) = rule;
