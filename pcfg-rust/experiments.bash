@@ -13,17 +13,17 @@ run-baselines() {
 	language="$1"
 	trainsize="$2"
 
-	$PCFGR --language=$language --trainsize=$trainsize &
+	$PCFGR --language=$language --trainsize=$trainsize --oovhandling=zero&
 	$PCFGR --language=$language --trainsize=$trainsize --oovhandling=uniform &
 	$PCFGR --language=$language --trainsize=$trainsize --oovhandling=marginal-all &
-	$PCFGR --language=$language --trainsize=$trainsize --oovhandling=marginal-le3 &
+	$PCFGR --language=$language --trainsize=$trainsize &
 	wait
 }
 
 feat-goldtags() {
 	for beta in $BETAVALS; do
 		for eta in $ETAVALS; do
-			$PCFGR --language=$1 --trainsize=$2 --eta=$eta --beta=$beta --oovhandling=marginal-le3 --featurestructures=postagsonly &
+			$PCFGR --language=$1 --trainsize=$2 --eta=$eta --beta=$beta --featurestructures=postagsonly &
 		done
 		wait
 	done
@@ -34,7 +34,7 @@ feat-varitags() {
 	for suffix in $2.gold "$2.pred" "40472.pred" "$2.pred --nbesttags" "40472.pred --nbesttags"; do
 		for beta in $BETAVALS; do
 			for eta in $ETAVALS; do
-				$PCFGR --language=$1 --trainsize=$2 --eta=$eta --beta=$beta --oovhandling=marginal-le3 --featurestructures=postagsonly --testtagsfile=../pos-tagging/data/spmrl.$languc.dev.sklearn_tagged.$suffix &
+				$PCFGR --language=$1 --trainsize=$2 --eta=$eta --beta=$beta --featurestructures=postagsonly --testtagsfile=../pos-tagging/data/spmrl.$languc.dev.sklearn_tagged.$suffix &
 			done
 			wait
 		done
@@ -44,18 +44,18 @@ feat-varitags() {
 feat-lcsratio() {
 	for beta in $BETAVALS; do
 		for eta in $ETAVALS; do
-			$PCFGR --language=$1 --trainsize=$2 --eta=$eta --beta=$beta --oovhandling=marginal-le3 --featurestructures=lcsratio &
+			$PCFGR --language=$1 --trainsize=$2 --eta=$eta --beta=$beta --featurestructures=lcsratio &
 		done
 		wait
 	done
 }
 
 feat-ngrams() {
-	for padmode in '' '--dualmonopad'; do
+	for padmode in '' '--dualmono-pad'; do
 		for kappa in 1 2 3 5 10; do
 			for beta in $BETAVALS; do
 				for eta in $ETAVALS; do
-					$PCFGR --language=$1 --trainsize=$2 --eta=$eta --beta=$beta --oovhandling=marginal-le3 --featurestructures=ngrams --kappa=$kappa $padmode &
+					$PCFGR --language=$1 --trainsize=$2 --eta=$eta --beta=$beta --featurestructures=ngrams --kappa=$kappa $padmode &
 				done
 				wait
 			done
@@ -66,7 +66,7 @@ feat-ngrams() {
 feat-levenshtein() {
 	for beta in $BETAVALS; do
 		for eta in $ETAVALS; do
-			$PCFGR --language=$1 --trainsize=$2 --eta=$eta --beta=$beta --oovhandling=marginal-le3 --featurestructures=levenshtein --beta=$beta &
+			$PCFGR --language=$1 --trainsize=$2 --eta=$eta --beta=$beta --featurestructures=levenshtein --beta=$beta &
 		done
 		wait
 	done
