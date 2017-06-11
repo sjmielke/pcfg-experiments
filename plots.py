@@ -1,5 +1,6 @@
 import itertools
 import sys
+from math import ceil
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -10,7 +11,6 @@ plt.rc('font', family='serif', serif=['charter'])
 markers = ['v','^','<','>','X','o','D','d']
 
 logroot = "/home/sjm/documents/Uni/FuzzySP/pcfg-experiments/logs/"
-tss = [100,500,1000,5000,10000,40472]
 
 def join_file_frames(filenames, indices):
     df = pd.DataFrame()
@@ -19,32 +19,68 @@ def join_file_frames(filenames, indices):
 
     return df #.sort_index(axis=0, level=indices, sort_remaining=False)
 
-def six_facet_plot(feature_structure, filenames, series_names, columnmapper = None, ignore_multiplies = False, legend_title = None, ywindow_size = None, ywindow_mid = lambda x, y: x + y / 2):
+def assert_singleton(nda):
+    if nda.size > 1:
+        print(f"Aggregating in ts {ts}: ", nda)
+        return np.mean(nda)
+    else:
+        return nda
+
+def multi_facet_plot(
+    feature_structure,
+    filenames,
+    series_names,
+    x_name = 'eta',
+    x_title = '$\\eta$',
+    df_restricter = None,
+    columnmapper = None,
+    aggregator = np.mean,
+    legend_title = None,
+    legend_ncols = None,
+    ywindow_size = None,
+    ywindow_mid = lambda x, y: x + y / 2,
+    facet_name = 'trainsize',
+    facets = [100,500,1000,5000,10000,40472],
+    nrows = 2):
+    
     indices = ['trainsize','feature_structures','oov_handling','eta','beta']
     indices += [sn for sn in series_names if sn not in indices]
     
     df = join_file_frames(filenames, indices).xs(feature_structure, level='feature_structures')
     
-    fig, ax = plt.subplots(2, 3, figsize=(10, 7)) #, sharex=True) #, sharey=True)
+    if df_restricter:
+        df = df_restricter(df)
+    
+    if not facet_name:
+        facets = ['']
+    
+    if not legend_title:
+        legend_title = ' $\\times$ '.join(series_names)
+    if not x_title:
+        x_title = x_name
+    
+    ncols = int(ceil(len(facets)/nrows))
+    
+    if facet_name:
+        xsize, ysize = 3*ncols, 3*nrows + 0.45
+    else:
+        xsize, ysize = 5, 3.75
+    
+    fig, ax = plt.subplots(nrows, ncols, squeeze=False, figsize=(xsize, ysize)) #, sharex=True) #, sharey=True)
 
-    for j in range(2):
-        for i in range(3):
-            ts = tss[i + 3*j]
+    for j in range(nrows):
+        for i in range(ncols):
+            facet = facets[i + ncols*j]
             
-            if (df.index.get_level_values('trainsize') == ts).any():
-                ts_df = df.loc[ts] # df.xs(ts, level='trainsize')
-                ts_df = ts_df.reset_index()
-                
-                def assert_singleton(nda):
-                    if nda.size > 1:
-                        if not ignore_multiplies:
-                            print(f"Aggregating in ts {ts}: ", nda)
-                        return np.mean(nda)
-                    else:
-                        return nda
+            if not facet_name or (df.index.get_level_values(facet_name) == facet).any():
+                if facet_name:
+                    facet_df = df.loc[facet] # df.xs(facet, level='trainsize')
+                else:
+                    facet_df = df
+                facet_df = facet_df.reset_index()
                 
                 # First pivot
-                plot_df = ts_df.pivot_table(index='eta', columns=series_names, values='fmeasure', aggfunc=assert_singleton)
+                plot_df = facet_df.pivot_table(index=x_name, columns=series_names, values='fmeasure', aggfunc=aggregator)
                 
                 # Simplify and potentially combine columns
                 if columnmapper:
@@ -68,26 +104,30 @@ def six_facet_plot(feature_structure, filenames, series_names, columnmapper = No
                 # Now plot each w/ different marker
                 for (series, marker) in zip(plot_df.columns, itertools.cycle(markers)):
                     plot_df[series].plot(ax=ax[j][i], marker=marker, markersize=3)
-                
-                #plot_df.plot(ax=ax[j][i], marker='o', markersize=2)
             
-            ax[j][i].set_xscale('symlog', linthreshx=0.001, linscalex=0.2)
-            ax[j][i].set_xlabel("$\\eta$", labelpad=0)
+            if x_name == 'eta':
+                ax[j][i].set_xscale('symlog', linthreshx=0.001, linscalex=0.2)
+            ax[j][i].set_xlabel(x_title, labelpad=0)
             if ywindow_size:
                 (bot, top) = ax[j][i].get_ylim()
                 mid = ywindow_mid(bot, top)
                 ax[j][i].set_ylim(mid - ywindow_size, mid + ywindow_size)
-            ax[j][i].set(ylabel='$F_1$ measure', title="trainsize {}".format(ts))
+            ax[j][i].set(ylabel='$F_1$ measure')
+            if facet_name:
+                ax[j][i].set(title=f"{facet_name} {facet}")
             ax[j][i].grid(True)
+    
+    fig.legend(ax[0][0].get_lines(), all_series, 'lower center', title=legend_title, ncol=legend_ncols if legend_ncols else len(all_series), fontsize=9 if facet_name else 7)
 
-    ax[1][1].legend(title=legend_title, loc='center', prop={'size':9}, bbox_to_anchor=(0.5, -0.275), ncol=len(all_series) + 1)
-
-
-    fig.tight_layout(rect=[0, 0.07, 1, 1])
+    fig.tight_layout(rect=[0, 0.05/nrows + 0.05, 1, 1])
     return fig
 
 
 
+def restricter_and(df, **kvargs):
+    for k, v in kvargs.items():
+        df = df[df[k] == v]
+    return df
 
 def simplify_postags_file(s):
     if '.' not in s[0]:
@@ -105,26 +145,57 @@ def simplify_postags_file(s):
     else:
         return "trainsize" + ", " + s[1][0] + "-best"
 
-six_facet_plot('lcsratio',
-    filenames = [logroot + "/german_megatune.log", logroot + "/german_apocalypsetune_coarse.log"],
-    series_names = ['beta'],
-    legend_title = '\\beta',
-    ywindow_size = 7,
-    ywindow_mid = lambda bot, top: top - 7
-    ).savefig('/tmp/lcsratio_monsterplot_eta.pdf', format='pdf', dpi=1000)
-
-six_facet_plot('postagsonly',
+multi_facet_plot('postagsonly',
     filenames = [logroot + "/german_megatune.log", logroot + "/german_apocalypsetune_coarse.log"],
     series_names = ['testtagsfile','nbesttags'],
     columnmapper = simplify_postags_file,
-    ignore_multiplies = True, # all tags when ts=all...
+    aggregator = np.mean, # all tags when ts=all...
     legend_title = 'tagger trained on'
     ).savefig('/tmp/tagged_monsterplot_eta.pdf', format='pdf', dpi=1000)
 
-six_facet_plot('levenshtein',
+multi_facet_plot('lcsratio',
     filenames = [logroot + "/german_megatune.log", logroot + "/german_apocalypsetune_coarse.log"],
     series_names = ['beta'],
-    legend_title = '\\beta',
+    legend_title = '$\\beta$',
+    ywindow_size = 7,
+    ywindow_mid = lambda bot, top: top - 7    ).savefig('/tmp/lcsratio_monsterplot_eta.pdf', format='pdf', dpi=1000)
+
+multi_facet_plot('lcsratio',
+    filenames = [logroot + "/german_06-10_lcsalphatune.log"],
+    series_names = ['trainsize'],
+    x_name = 'alpha',
+    x_title = '$\\alpha$',
+    
+    facet_name = None,
+    nrows = 1
+    ).savefig('/tmp/lcsratio_alphaplot_.pdf', format='pdf', dpi=1000)
+
+multi_facet_plot('levenshtein',
+    filenames = [logroot + "/german_megatune.log", logroot + "/german_apocalypsetune_coarse.log"],
+    series_names = ['beta'],
+    legend_title = '$\\beta$',
     ywindow_size = 7,
     ywindow_mid = lambda bot, top: top - 7
     ).savefig('/tmp/levenshtein_monsterplot_eta.pdf', format='pdf', dpi=1000)
+
+multi_facet_plot('ngrams',
+    filenames = [logroot + "/german_06-10_omnitune.log"],
+    series_names = ['kappa','beta'],
+    df_restricter = lambda df: restricter_and(df, dualmono_pad = 'fullpad'),
+    columnmapper = lambda t: f"$\\kappa={t[0]}, \\beta={t[1]}$",
+    legend_title = '$\\kappa \\times \\beta$',
+    legend_ncols = 5,
+    ywindow_size = 7,
+    ywindow_mid = lambda bot, top: top - 7
+    ).savefig('/tmp/ngrams_omni_monsterplot_eta.pdf', format='pdf', dpi=1000)
+
+multi_facet_plot('ngrams',
+    filenames = [logroot + "/german_06-10_omnitune.log"],
+    series_names = ['beta'],
+    df_restricter = lambda df: restricter_and(df, dualmono_pad = 'fullpad', kappa = 10),
+    legend_title = '$\\beta$',
+    ywindow_size = 7,
+    ywindow_mid = lambda bot, top: top - 7,
+    facets = [100,1000,10000,40472],
+    nrows = 1
+    ).savefig('/tmp/ngrams_kappa10_monsterplot_eta.pdf', format='pdf', dpi=1000)
