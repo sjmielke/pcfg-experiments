@@ -239,7 +239,6 @@ pub fn agenda_cky_parse<'a>(
                         bins[bin(comp)] += 1;
                         if wsent == wrule {*fullmatches += 1}
                     };
-                    
                     let lp_add = if wrule == wsent {
                         (stats.eta * comp.powf(stats.beta) + (1.0-stats.eta)).ln()
                     } else {
@@ -264,21 +263,34 @@ pub fn agenda_cky_parse<'a>(
                 stats.oov_words += 1
             }
             
-            match terminal_matcher {
-                TerminalMatcher::ExactMatcher(ref mut embdr) => {
-                    handle_terminals(embdr, &mut ckychart, &mut agenda, i, sentlen, ntcount, wsent, wsent_pos_desc, &mut bins, &mut fullmatches, &mut stats)
+            let is_oov = word_to_preterminal.get(*wsent) == None;
+            
+            if !stats.only_oovs_soft || is_oov {
+                match terminal_matcher {
+                    TerminalMatcher::ExactMatcher(ref mut embdr) => {
+                        handle_terminals(embdr, &mut ckychart, &mut agenda, i, sentlen, ntcount, wsent, wsent_pos_desc, &mut bins, &mut fullmatches, &mut stats)
+                    }
+                    TerminalMatcher::POSTagMatcher(ref mut embdr) => {
+                        handle_terminals(embdr, &mut ckychart, &mut agenda, i, sentlen, ntcount, wsent, wsent_pos_desc, &mut bins, &mut fullmatches, &mut stats)
+                    }
+                    TerminalMatcher::LCSMatcher(ref mut embdr) => {
+                        handle_terminals(embdr, &mut ckychart, &mut agenda, i, sentlen, ntcount, wsent, wsent_pos_desc, &mut bins, &mut fullmatches, &mut stats)
+                    }
+                    TerminalMatcher::NGramMatcher(ref mut embdr) => {
+                        handle_terminals(embdr, &mut ckychart, &mut agenda, i, sentlen, ntcount, wsent, wsent_pos_desc, &mut bins, &mut fullmatches, &mut stats)
+                    },
+                    TerminalMatcher::LevenshteinMatcher(ref mut embdr) => {
+                        handle_terminals(embdr, &mut ckychart, &mut agenda, i, sentlen, ntcount, wsent, wsent_pos_desc, &mut bins, &mut fullmatches, &mut stats)
+                    }
                 }
-                TerminalMatcher::POSTagMatcher(ref mut embdr) => {
-                    handle_terminals(embdr, &mut ckychart, &mut agenda, i, sentlen, ntcount, wsent, wsent_pos_desc, &mut bins, &mut fullmatches, &mut stats)
-                }
-                TerminalMatcher::LCSMatcher(ref mut embdr) => {
-                    handle_terminals(embdr, &mut ckychart, &mut agenda, i, sentlen, ntcount, wsent, wsent_pos_desc, &mut bins, &mut fullmatches, &mut stats)
-                }
-                TerminalMatcher::NGramMatcher(ref mut embdr) => {
-                    handle_terminals(embdr, &mut ckychart, &mut agenda, i, sentlen, ntcount, wsent, wsent_pos_desc, &mut bins, &mut fullmatches, &mut stats)
-                },
-                TerminalMatcher::LevenshteinMatcher(ref mut embdr) => {
-                    handle_terminals(embdr, &mut ckychart, &mut agenda, i, sentlen, ntcount, wsent, wsent_pos_desc, &mut bins, &mut fullmatches, &mut stats)
+            } else {
+                // Otherwise only do exact matching!
+                if let Some(tagginglogprobs) = word_to_preterminal.get(*wsent) {
+                    for &(nt, logprob) in tagginglogprobs {
+                        let addr = chart_adr(sentlen, ntcount, i, i + 1, nt);
+                        ckychart[addr].0 = logprob;
+                        agenda.push(AgendaItem(logprob, i, i+1, nt))
+                    }
                 }
             }
         }

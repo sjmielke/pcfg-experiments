@@ -208,6 +208,7 @@ fn main() {
         beta: 10.0,
         kappa: 3,
         all_terms_fallback: false,
+        only_oovs_soft: false,
         exhaustive: false,
         uniform_oov_prob: -10.0
     };
@@ -260,6 +261,9 @@ fn main() {
         ap.refer(&mut stats.all_terms_fallback)
             .add_option(&["--all-terms-fallback"], StoreTrue,
             "Allows OOV-like treatment to all terms as fallback");
+        ap.refer(&mut stats.only_oovs_soft)
+            .add_option(&["--only-oovs-soft"], StoreTrue,
+            "(set eta = 0.0)");
         ap.refer(&mut stats.exhaustive)
             .add_option(&["--exhaustive"], StoreTrue,
             "Forces exhaustive search for all parses");

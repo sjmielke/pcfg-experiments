@@ -159,6 +159,7 @@ pub struct PCFGParsingStatistics {
     pub trainsize: usize,
     pub oov_handling: OOVHandling,
     pub all_terms_fallback: bool,
+    pub only_oovs_soft: bool,
     pub exhaustive: bool,
     pub uniform_oov_prob: f64,
     pub feature_structures: String,
@@ -191,7 +192,7 @@ pub struct PCFGParsingStatistics {
 impl PCFGParsingStatistics {
     pub fn print(&self, head: bool) {
         if head {
-            println!("language\ttrainsize\tunbin_nts\tbin_nts\toov_handling\tuniform_oov_prob\tfeature_structures\ttesttagsfile\tnbesttags\tdualmono_pad\tlogcompvalues\tkeepafterdash\teta\talpha\tbeta\tkappa\tall_terms_fallback\texhaustive\tgram_ext_bin\tcky_prep\tcky_terms\tcky_higher\toov_words\toov_sents\tparsefails\tfmeasure\tfmeasure (fail ok)\ttagaccuracy");
+            println!("language\ttrainsize\tunbin_nts\tbin_nts\toov_handling\tuniform_oov_prob\tfeature_structures\ttesttagsfile\tnbesttags\tdualmono_pad\tlogcompvalues\tkeepafterdash\teta\talpha\tbeta\tkappa\tall_terms_fallback\tonly_oovs_soft\texhaustive\tgram_ext_bin\tcky_prep\tcky_terms\tcky_higher\toov_words\toov_sents\tparsefails\tfmeasure\tfmeasure (fail ok)\ttagaccuracy");
         }
         print!("{}\t", self.language);
         print!("{}\t", self.trainsize);
@@ -210,6 +211,7 @@ impl PCFGParsingStatistics {
         print!("{}\t", self.beta);
         print!("{}\t", self.kappa);
         print!("{}\t", if self.all_terms_fallback {"all_terms_fallback"} else {"no_fallback"});
+        print!("{}\t", if self.only_oovs_soft {"onlyoovssoft"} else {"allsoft"});
         print!("{}\t", if self.exhaustive {"exhaustive"} else {"stop_on_first_goal"});
         print!("{:.3}\t", self.gram_ext_bin);
         print!("{:.3}\t", self.cky_prep);
