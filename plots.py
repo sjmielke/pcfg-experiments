@@ -189,13 +189,14 @@ multi_facet_plot('ngrams',
     ywindow_mid = lambda bot, top: top - 7
     ).savefig('/tmp/ngrams_omni_monsterplot_eta.pdf', format='pdf', dpi=1000)
 
-multi_facet_plot('ngrams',
-    filenames = [logroot + "/german_06-10_omnitune.log"],
-    series_names = ['beta'],
-    df_restricter = lambda df: restricter_and(df, dualmono_pad = 'fullpad', kappa = 10),
-    legend_title = '$\\beta$',
-    ywindow_size = 7,
-    ywindow_mid = lambda bot, top: top - 7,
-    facets = [100,1000,10000,40472],
-    nrows = 1
-    ).savefig('/tmp/ngrams_kappa10_monsterplot_eta.pdf', format='pdf', dpi=1000)
+for kappa in [1, 2, 3, 5, 10]:
+    multi_facet_plot('ngrams',
+        filenames = [logroot + "/german_06-10_omnitune.log", logroot + "/german_06-11_eta0001.log"],
+        series_names = ['beta'],
+        df_restricter = lambda df: restricter_and(df, dualmono_pad = 'fullpad', kappa = kappa),
+        legend_title = '$\\beta$',
+        ywindow_size = 7,
+        ywindow_mid = lambda bot, top: top - 7,
+        facets = [100,1000,10000,40472],
+        nrows = 1
+        ).savefig(f"/tmp/ngrams_kappa{kappa}_monsterplot_eta.pdf", format='pdf', dpi=1000)
