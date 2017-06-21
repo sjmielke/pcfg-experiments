@@ -53,7 +53,9 @@ def multi_facet_plot(
     df = join_file_frames(filenames, indices).xs(feature_structure, level='feature_structures')
     
     if df_restricter:
+        df = df.reset_index()
         df = df_restricter(df)
+        df = df.set_index([i for i in indices if i != 'feature_structures'])
     
     if not facet_name:
         facets = ['']
@@ -208,15 +210,16 @@ def simplify_postags_file(s):
 #     ).savefig('/tmp/plots/lcsratio_betaplot.pdf', format='pdf', dpi=1000)
 
 multi_facet_plot('prefixsuffix',
-    filenames = [logroot + "/german_06-21_prefixsuffix_ts500.log"],
+    filenames = [logroot + "/german_06-21_prefixsuffix_alpha02_omega05.log"],
     series_names = ['beta', 'tau'],
 	columnmapper = lambda t: f"({t[0]}, {t[1]})",
     legend_title = '$\\beta \\times \\tau$',
     ywindow_size = 7,
     ywindow_mid = lambda bot, top: top - 7,
-	facets = [500, 1000],
+	facets = [100, 500, 1000, 10000],
+    df_restricter = lambda df: restricter_and(df, beta = 1.0),
 	nrows = 1
-    ).savefig('/tmp/plots/prefixsuffix_omega05.pdf', format='pdf', dpi=1000)
+    ).savefig('/tmp/plots/prefixsuffix_alpha02_omega05.pdf', format='pdf', dpi=1000)
 
 # multi_facet_plot('levenshtein',
 #     filenames = [logroot + "/german_megatune.log", logroot + "/german_apocalypsetune_coarse.log"],
@@ -232,8 +235,8 @@ multi_facet_plot('prefixsuffix',
 #     x_name = 'beta',
 #     x_title = '$\\beta$',
 #     facet_name = 'eta',
-# 	facet_title = "$\\eta$",
-# 	facets = [0.006, 0.06, 0.6],
+#     facet_title = "$\\eta$",
+#     facets = [0.006, 0.06, 0.6],
 #     nrows = 1
 #     ).savefig('/tmp/plots/levenshtein_betaplot.pdf', format='pdf', dpi=1000)
 # 
