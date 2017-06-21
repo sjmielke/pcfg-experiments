@@ -228,19 +228,20 @@ def simplify_postags_file(s):
 
 # LOTS OF NGRAMS STUFF
 
-multi_facet_plot('ngrams',
-    filenames = [logroot + "/german_06-19_ngrams_kappatune_eta006_beta10.log"],
-    series_names = ['dualmono_pad'],
-    legend_title = "padding",
-    df_restricter = lambda df: df[df["kappa"] <= 10],
-    x_name = 'kappa',
-    x_title = '$\\kappa$',
-    facet_name = 'trainsize',
-    facets = [100, 500, 1000, 10000],
-    nrows = 1,
-    legend_right = False,
-    ywindow_size = 2
-    ).savefig('/tmp/plots/ngrams_kappatune_eta006_beta10.pdf', format='pdf', dpi=1000)
+for (date, scenario) in [(19, "eta006_beta10"), (21, "optimal")]:
+    multi_facet_plot('ngrams',
+        filenames = [logroot + f"/german_06-{date}_ngrams_kappatune_{scenario}.log"],
+        series_names = ['dualmono_pad'],
+        legend_title = "padding",
+        df_restricter = lambda df: df[df["kappa"] <= 10],
+        x_name = 'kappa',
+        x_title = '$\\kappa$',
+        facet_name = 'trainsize',
+        facets = [100, 500, 1000, 10000],
+        nrows = 1,
+        legend_right = False,
+        ywindow_size = 2
+        ).savefig(f"/tmp/plots/ngrams_kappatune_{scenario}.pdf", format='pdf', dpi=1000)
 
 for paddingmode in ['fullpad', 'dualmonopad']:
     multi_facet_plot('ngrams',

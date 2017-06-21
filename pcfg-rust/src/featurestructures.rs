@@ -189,8 +189,7 @@ pub struct PrefixSuffixEmbedder {
     
     alpha: f64,
     omega: f64,
-    tau: f64,
-    decay: bool
+    tau: f64
 }
 impl PrefixSuffixEmbedder {
     fn cp_len<T: Eq + ::std::fmt::Display>(a: &[T], b: &[T]) -> usize {
@@ -207,9 +206,7 @@ impl PrefixSuffixEmbedder {
         let bl = b.len();
         let mut l = 0;
         while l < al && l < bl && a[al-l-1] == b[bl-l-1] {
-            l += 1;
-            // println!("{}<{} {}<{}", l, a.len(), l, b.len());
-            // println!("{} {}", a[al-l-1], b[bl-l-1]);
+            l += 1
         }
         return l
     }
@@ -233,7 +230,7 @@ impl IsEmbedding for PrefixSuffixEmbedder {
         let cslen: i32 = PrefixSuffixEmbedder::cs_len(self.id2e[erule].as_slice(), self.id2e[esent].as_slice()) as i32;
         let w_avg: f64 = self.alpha * lrule + (1.0-self.alpha) * lsent;
         
-        let (cp, cs, dn) = if !self.decay {
+        let (cp, cs, dn) = if self.tau == 1.0 {
             (cplen as f64, cslen as f64, w_avg)
         } else {
             (self.geom_upto_i(cplen), self.geom_upto_i(cslen), self.geom_upto_f(w_avg))
@@ -365,7 +362,7 @@ pub fn embed_rules(
             TerminalMatcher::LCSMatcher(embdr)
         },
         "prefixsuffix" => {
-            let mut embdr = PrefixSuffixEmbedder { e_id_to_rules: Vec::new(), e2id: HashMap::new(), id2e: Vec::new(), alpha: stats.alpha, omega: stats.omega, tau: stats.tau, decay: stats.decay };
+            let mut embdr = PrefixSuffixEmbedder { e_id_to_rules: Vec::new(), e2id: HashMap::new(), id2e: Vec::new(), alpha: stats.alpha, omega: stats.omega, tau: stats.tau };
             embdr.build_e_to_rules(word_to_preterminal);
             TerminalMatcher::PrefixSuffixMatcher(embdr)
         },

@@ -203,7 +203,6 @@ fn main() {
         dualmono_pad: false,
         logcompvalues: false,
         keepafterdash: false,
-        decay: false,
         eta: 0.06,
         alpha: 0.2,
         beta: 10.0,
@@ -243,9 +242,6 @@ fn main() {
         ap.refer(&mut stats.keepafterdash)
             .add_option(&["--keepafterdash"], StoreTrue,
             "Keep everything after a - from SPMRL NTs (e.g., NP-SBJ instead of NP)");
-        ap.refer(&mut stats.decay)
-            .add_option(&["--decay"], StoreTrue,
-            "use decaying weights (with hyperparameter tau) in PrefixSuffixMatcher");
         ap.refer(&mut stats.eta)
             .add_option(&["--eta"], Store,
             "Softness factor (default: 0.06)");

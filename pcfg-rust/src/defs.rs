@@ -168,7 +168,6 @@ pub struct PCFGParsingStatistics {
     pub dualmono_pad: bool,
     pub logcompvalues: bool,
     pub keepafterdash: bool,
-    pub decay: bool,
     pub eta: f64,
     pub alpha: f64,
     pub beta: f64,
@@ -195,7 +194,7 @@ pub struct PCFGParsingStatistics {
 impl PCFGParsingStatistics {
     pub fn print(&self, head: bool) {
         if head {
-            println!("language\ttrainsize\tunbin_nts\tbin_nts\toov_handling\tuniform_oov_prob\tfeature_structures\ttesttagsfile\tnbesttags\tdualmono_pad\tlogcompvalues\tkeepafterdash\tprefixsuffixweights\teta\talpha\tbeta\tkappa\tomega\tall_terms_fallback\tonly_oovs_soft\texhaustive\tgram_ext_bin\tcky_prep\tcky_terms\tcky_higher\toov_words\toov_sents\tparsefails\tfmeasure\tfmeasure (fail ok)\ttagaccuracy");
+            println!("language\ttrainsize\tunbin_nts\tbin_nts\toov_handling\tuniform_oov_prob\tfeature_structures\ttesttagsfile\tnbesttags\tdualmono_pad\tlogcompvalues\tkeepafterdash\teta\talpha\tbeta\tkappa\tomega\tall_terms_fallback\tonly_oovs_soft\texhaustive\tgram_ext_bin\tcky_prep\tcky_terms\tcky_higher\toov_words\toov_sents\tparsefails\tfmeasure\tfmeasure (fail ok)\ttagaccuracy");
         }
         print!("{}\t", self.language);
         print!("{}\t", self.trainsize);
@@ -209,7 +208,6 @@ impl PCFGParsingStatistics {
         print!("{}\t", if self.dualmono_pad {"dualmonopad"} else {"fullpad"});
         print!("{}\t", if self.logcompvalues {"logcompvalues"} else {"nocompvallog"});
         print!("{}\t", if self.keepafterdash {"keepafterdash"} else {"noafterdash"});
-        print!("{}\t", if self.decay {"decay"} else {"constant"});
         print!("{}\t", self.eta);
         print!("{}\t", self.alpha);
         print!("{}\t", self.beta);
