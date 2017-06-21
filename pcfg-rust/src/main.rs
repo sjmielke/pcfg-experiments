@@ -242,13 +242,13 @@ fn main() {
             "Keep everything after a - from SPMRL NTs (e.g., NP-SBJ instead of NP)");
         ap.refer(&mut stats.eta)
             .add_option(&["--eta"], Store,
-            "Softness factor (default: 1.0)");
+            "Softness factor (default: 0.06)");
         ap.refer(&mut stats.alpha)
             .add_option(&["--alpha"], Store,
-            "Hyperparameter alpha (default: 0.5)");
+            "Hyperparameter alpha (default: 0.2)");
         ap.refer(&mut stats.beta)
             .add_option(&["--beta"], Store,
-            "Hyperparameter beta (default: 1.0)");
+            "Hyperparameter beta (default: 10.0)");
         ap.refer(&mut stats.kappa)
             .add_option(&["--kappa"], Store,
             "Hyperparameter kappa (default: 1)");

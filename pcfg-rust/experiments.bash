@@ -5,9 +5,11 @@ echo $'language\ttrainsize\tunbin_nts\tbin_nts\toov_handling\tuniform_oov_prob\t
 
 PCFGR="/home/student/mielke/pcfg-experiments/pcfg-rust/target/release/pcfg-rust --wsjpath=/home/student/mielke/ptb3/parsed/mrg/wsj --spmrlpath=/home/student/mielke/SPMRL_SHARED_2014"
 
-#ETAVALS="0.0 0.001 0.003 0.006 0.01 0.03 0.06 0.1 0.3 0.6 0.95 1.0"
- ETAVALS="0.0 0.006 0.06 0.6 1.0"
-BETAVALS="1.0 2.0 5.0 10.0 20.0"
+#   ETAVALS="0.0 0.001 0.003 0.006 0.01 0.03 0.06 0.1 0.3 0.6 0.95 1.0"
+   ETAVALS="0.0 0.006 0.06 0.6 1.0"
+  BETAVALS="1.0 2.0 5.0 10.0 20.0"
+#TRAINSIZES="100 500 1000 5000 10000 40472"
+TRAINSIZES="100 500 1000 10000"
 
 run-baselines() {
 	language="$1"
@@ -50,9 +52,20 @@ feat-lcsratio() {
 	done
 }
 
+lcsratio-alphatune() {
+	for alpha in 0.0 0.1 0.2 0.3 0.4 0.5; do
+		$PCFGR --language=$1 --trainsize=$2 --trainsize=$trainsize --featurestructures=lcsratio --alpha=$alpha &
+	done
+	wait
+	for alpha in 0.6 0.7 0.8 0.9 1.0; do
+		$PCFGR --language=$1 --trainsize=$2 --trainsize=$trainsize --featurestructures=lcsratio --alpha=$alpha &
+	done
+	wait
+}
+
 feat-ngrams() {
 	for padmode in '' '--dualmono-pad'; do
-		for kappa in 1 2 3 5 10; do
+		for kappa in 1 2 3 4 5 10; do
 			for beta in $BETAVALS; do
 				for eta in $ETAVALS; do
 					$PCFGR --language=$1 --trainsize=$2 --eta=$eta --beta=$beta --featurestructures=ngrams --kappa=$kappa $padmode &
@@ -60,6 +73,30 @@ feat-ngrams() {
 				wait
 			done
 		done
+	done
+}
+
+ngrams-kappatune-constant() {
+	for kappa in 1 2 3 4 5 10 20 50 ; do
+		$PCFGR --language=$1 --trainsize=$2 --featurestructures=ngrams --kappa=$kappa &
+	  $PCFGR --language=$1 --trainsize=$2 --featurestructures=ngrams --kappa=$kappa --dualmono-pad &
+	  wait
+	done
+}
+
+ngrams-kappatune-optimal() {
+	for padding in '' '--dualmono-pad'; do
+		kappas=( 1 2 3 4 5 10 )
+		if   [[ $2 == 100 ]];   then etas=( 0.1  0.1 0.6 1   1   1   ); betas=( 10 5  5  5  5  5 )
+		elif [[ $2 == 500 ]];   then etas=( 0.1  1   1   0.6 0.6 1   ); betas=( 20 10 10 5  5  5 )
+		elif [[ $2 == 1000 ]];  then etas=( 0.1  1   1   1   1   1   ); betas=( 20 10 10 10 5  5 )
+		elif [[ $2 == 10000 ]]; then etas=( 0.01 1   1   1   1   1   ); betas=( 20 20 10 10 10 10 )
+		else echo "#\n#\n#\n#\n#\n# illegal train size\n#\n#\n#\n#\n#\n#\n"
+		fi
+		for i in 0 1 2 3 4 5; do
+			echo $PCFGR --language=$1 --trainsize=$2 --featurestructures=ngrams --kappa=${kappas[$i]} --eta=${etas[$i]} --beta=${betas[$i]} $padding &
+		done
+		wait
 	done
 }
 
@@ -72,23 +109,14 @@ feat-levenshtein() {
 	done
 }
 
-for trainsize in 100 500 1000 5000 10000 40472; do
-	# run-baselines    German "$trainsize"
-	# feat-goldtags    German "$trainsize"
-	# feat-varitags    German "$trainsize"
-	# feat-lcsratio    German "$trainsize"
-	feat-ngrams      German "$trainsize"
-	# feat-levenshtein German "$trainsize"
+for trainsize in $TRAINSIZES; do
+	# run-baselines             German "$trainsize"
+	# feat-goldtags             German "$trainsize"
+	# feat-varitags             German "$trainsize"
+	# feat-lcsratio             German "$trainsize"
+	# lcsratio-alphatune        German "$trainsize"
+	# feat-ngrams               German "$trainsize"
+	# ngrams-kappatune-constant German "$trainsize"
+	ngrams-kappatune-optimal  German "$trainsize"
+	# feat-levenshtein          German "$trainsize"
 done
-
-# # German defaults alpha-tuning
-# for trainsize in 40472 10000 5000 1000 500 100; do
-# 	for alpha in 0.0 0.1 0.2 0.3 0.4 0.5; do
-# 		$PCFGR --trainsize=$trainsize --featurestructures=lcsratio --alpha=$alpha &
-# 	done
-# 	wait
-# 	for alpha in 0.6 0.7 0.8 0.9 1.0; do
-# 		$PCFGR --trainsize=$trainsize --featurestructures=lcsratio --alpha=$alpha &
-# 	done
-# 	wait
-# done

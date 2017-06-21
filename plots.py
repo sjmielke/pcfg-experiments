@@ -3,6 +3,7 @@ import sys
 from math import ceil
 import numpy as np
 import pandas as pd
+import matplotlib
 import matplotlib.pyplot as plt
 from collections import OrderedDict
 
@@ -35,11 +36,14 @@ def multi_facet_plot(
     df_restricter = None,
     columnmapper = None,
     aggregator = np.mean,
+    legend_right = True,
     legend_title = None,
     legend_ncols = None,
+	legend_extraspace = 0.0,
     ywindow_size = None,
-    ywindow_mid = lambda x, y: x + y / 2,
+    ywindow_mid = lambda x, y: (x + y) / 2,
     facet_name = 'trainsize',
+	facet_title = None,
     facets = [100,500,1000,5000,10000,40472],
     nrows = 2):
     
@@ -54,6 +58,9 @@ def multi_facet_plot(
     if not facet_name:
         facets = ['']
     
+    if not facet_title:
+        facet_title = facet_name
+    
     if not legend_title:
         legend_title = ' $\\times$ '.join(series_names)
     if not x_title:
@@ -62,9 +69,15 @@ def multi_facet_plot(
     ncols = int(ceil(len(facets)/nrows))
     
     if facet_name:
-        xsize, ysize = 3*ncols, 3*nrows + 0.45
+        if legend_right:
+            xsize, ysize = 3*ncols + 0.45, 3*nrows
+        else:
+            xsize, ysize = 3*ncols, 3*nrows + 0.45
     else:
-        xsize, ysize = 5, 3.75
+        if legend_right:
+            xsize, ysize = 5.45, 3.35
+        else:
+            xsize, ysize = 5, 3.75
     
     fig, ax = plt.subplots(nrows, ncols, squeeze=False, figsize=(xsize, ysize)) #, sharex=True) #, sharey=True)
 
@@ -74,7 +87,7 @@ def multi_facet_plot(
             
             if not facet_name or (df.index.get_level_values(facet_name) == facet).any():
                 if facet_name:
-                    facet_df = df.loc[facet] # df.xs(facet, level='trainsize')
+                    facet_df = df.xs(facet, level=facet_name)
                 else:
                     facet_df = df
                 facet_df = facet_df.reset_index()
@@ -105,21 +118,33 @@ def multi_facet_plot(
                 for (series, marker) in zip(plot_df.columns, itertools.cycle(markers)):
                     plot_df[series].plot(ax=ax[j][i], marker=marker, markersize=3)
             
-            if x_name == 'eta':
+            if x_name == 'eta' or x_name == 'kappa':
                 ax[j][i].set_xscale('symlog', linthreshx=0.001, linscalex=0.2)
+            
+            if x_name == 'kappa':
+                ax[j][i].set_xticks([1,2,3,4,5,10])
+                ax[j][i].get_xaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
+            
             ax[j][i].set_xlabel(x_title, labelpad=0)
+            
             if ywindow_size:
                 (bot, top) = ax[j][i].get_ylim()
                 mid = ywindow_mid(bot, top)
                 ax[j][i].set_ylim(mid - ywindow_size, mid + ywindow_size)
             ax[j][i].set(ylabel='$F_1$ measure')
+            
             if facet_name:
-                ax[j][i].set(title=f"{facet_name} {facet}")
+                ax[j][i].set(title=f"{facet_title} = {facet}")
+            
             ax[j][i].grid(True)
     
-    fig.legend(ax[0][0].get_lines(), all_series, 'lower center', title=legend_title, ncol=legend_ncols if legend_ncols else len(all_series), fontsize=9 if facet_name else 7)
+    if legend_right:
+        fig.legend(ax[0][0].get_lines(), all_series, 'right', title=legend_title, ncol=1, fontsize=9 if facet_name else 7)
+        fig.tight_layout(rect=[0, 0, 1 - 0.05/ncols - 0.1 - legend_extraspace, 1])
+    else:
+        fig.legend(ax[0][0].get_lines(), all_series, 'lower center', title=legend_title, ncol=legend_ncols if legend_ncols else len(all_series), fontsize=9 if facet_name else 7)
+        fig.tight_layout(rect=[0, 0.05/nrows + 0.05 + legend_extraspace, 1, 1])
 
-    fig.tight_layout(rect=[0, 0.05/nrows + 0.05, 1, 1])
     return fig
 
 
@@ -145,58 +170,98 @@ def simplify_postags_file(s):
     else:
         return "trainsize" + ", " + s[1][0] + "-best"
 
-multi_facet_plot('postagsonly',
-    filenames = [logroot + "/german_megatune.log", logroot + "/german_apocalypsetune_coarse.log"],
-    series_names = ['testtagsfile','nbesttags'],
-    columnmapper = simplify_postags_file,
-    aggregator = np.mean, # all tags when ts=all...
-    legend_title = 'tagger trained on'
-    ).savefig('/tmp/tagged_monsterplot_eta.pdf', format='pdf', dpi=1000)
+# multi_facet_plot('postagsonly',
+#     filenames = [logroot + "/german_megatune.log", logroot + "/german_apocalypsetune_coarse.log"],
+#     series_names = ['testtagsfile','nbesttags'],
+#     columnmapper = simplify_postags_file,
+#     aggregator = np.mean, # all tags when ts=all...
+#     legend_title = 'tagger trained on',
+# 	legend_extraspace = 0.05
+#     ).savefig('/tmp/plots/tagged_monsterplot_eta.pdf', format='pdf', dpi=1000)
+# 
+# multi_facet_plot('lcsratio',
+#     filenames = [logroot + "/german_megatune.log", logroot + "/german_apocalypsetune_coarse.log"],
+#     series_names = ['beta'],
+#     legend_title = '$\\beta$',
+#     ywindow_size = 7,
+#     ywindow_mid = lambda bot, top: top - 7
+#     ).savefig('/tmp/plots/lcsratio_monsterplot_eta.pdf', format='pdf', dpi=1000)
+# 
+# multi_facet_plot('lcsratio',
+#     filenames = [logroot + "/german_06-10_lcs_alphatune.log"],
+#     series_names = ['trainsize'],
+#     x_name = 'alpha',
+#     x_title = '$\\alpha$',
+#     facet_name = None,
+#     nrows = 1
+#     ).savefig('/tmp/plots/lcsratio_alphaplot.pdf', format='pdf', dpi=1000)
+# 
+# multi_facet_plot('lcsratio',
+#     filenames = [logroot + "/german_megatune.log", logroot + "/german_apocalypsetune_coarse.log"],
+#     series_names = ['trainsize'],
+#     x_name = 'beta',
+#     x_title = '$\\beta$',
+#     facet_name = 'eta',
+# 	facet_title = "$\\eta$",
+# 	facets = [0.006, 0.06, 0.6],
+#     nrows = 1
+#     ).savefig('/tmp/plots/lcsratio_betaplot.pdf', format='pdf', dpi=1000)
+# 
+# multi_facet_plot('levenshtein',
+#     filenames = [logroot + "/german_megatune.log", logroot + "/german_apocalypsetune_coarse.log"],
+#     series_names = ['beta'],
+#     legend_title = '$\\beta$',
+#     ywindow_size = 7,
+#     ywindow_mid = lambda bot, top: top - 7
+#     ).savefig('/tmp/plots/levenshtein_monsterplot_eta.pdf', format='pdf', dpi=1000)
+# 
+# multi_facet_plot('levenshtein',
+#     filenames = [logroot + "/german_megatune.log", logroot + "/german_apocalypsetune_coarse.log"],
+#     series_names = ['trainsize'],
+#     x_name = 'beta',
+#     x_title = '$\\beta$',
+#     facet_name = 'eta',
+# 	facet_title = "$\\eta$",
+# 	facets = [0.006, 0.06, 0.6],
+#     nrows = 1
+#     ).savefig('/tmp/plots/levenshtein_betaplot.pdf', format='pdf', dpi=1000)
 
-multi_facet_plot('lcsratio',
-    filenames = [logroot + "/german_megatune.log", logroot + "/german_apocalypsetune_coarse.log"],
-    series_names = ['beta'],
-    legend_title = '$\\beta$',
-    ywindow_size = 7,
-    ywindow_mid = lambda bot, top: top - 7    ).savefig('/tmp/lcsratio_monsterplot_eta.pdf', format='pdf', dpi=1000)
-
-multi_facet_plot('lcsratio',
-    filenames = [logroot + "/german_06-10_lcsalphatune.log"],
-    series_names = ['trainsize'],
-    x_name = 'alpha',
-    x_title = '$\\alpha$',
-    
-    facet_name = None,
-    nrows = 1
-    ).savefig('/tmp/lcsratio_alphaplot_.pdf', format='pdf', dpi=1000)
-
-multi_facet_plot('levenshtein',
-    filenames = [logroot + "/german_megatune.log", logroot + "/german_apocalypsetune_coarse.log"],
-    series_names = ['beta'],
-    legend_title = '$\\beta$',
-    ywindow_size = 7,
-    ywindow_mid = lambda bot, top: top - 7
-    ).savefig('/tmp/levenshtein_monsterplot_eta.pdf', format='pdf', dpi=1000)
+# LOTS OF NGRAMS STUFF
 
 multi_facet_plot('ngrams',
-    filenames = [logroot + "/german_06-10_omnitune.log"],
-    series_names = ['kappa','beta'],
-    df_restricter = lambda df: restricter_and(df, dualmono_pad = 'fullpad'),
-    columnmapper = lambda t: f"$\\kappa={t[0]}, \\beta={t[1]}$",
-    legend_title = '$\\kappa \\times \\beta$',
-    legend_ncols = 5,
-    ywindow_size = 7,
-    ywindow_mid = lambda bot, top: top - 7
-    ).savefig('/tmp/ngrams_omni_monsterplot_eta.pdf', format='pdf', dpi=1000)
+    filenames = [logroot + "/german_06-19_ngrams_kappatune_eta006_beta10.log"],
+    series_names = ['dualmono_pad'],
+    legend_title = "padding",
+    df_restricter = lambda df: df[df["kappa"] <= 10],
+    x_name = 'kappa',
+    x_title = '$\\kappa$',
+    facet_name = 'trainsize',
+    facets = [100, 500, 1000, 10000],
+    nrows = 1,
+    legend_right = False,
+    ywindow_size = 2
+    ).savefig('/tmp/plots/ngrams_kappatune_eta006_beta10.pdf', format='pdf', dpi=1000)
 
-for kappa in [1, 2, 3, 5, 10]:
+for paddingmode in ['fullpad', 'dualmonopad']:
     multi_facet_plot('ngrams',
-        filenames = [logroot + "/german_06-10_omnitune.log", logroot + "/german_06-11_eta0001.log"],
-        series_names = ['beta'],
-        df_restricter = lambda df: restricter_and(df, dualmono_pad = 'fullpad', kappa = kappa),
-        legend_title = '$\\beta$',
+        filenames = [logroot + "/german_06-10_ngrams_omnitune.log", logroot + "/german_06-11_ngrams_eta0001.log", logroot + "/german_06-20_ngrams_etabetakappa_kappa4_le500.log", logroot + "/german_06-20_ngrams_etabetakappa_kappa4_gt500.log"],
+        series_names = ['kappa','beta'],
+        df_restricter = lambda df: restricter_and(df, dualmono_pad = paddingmode),
+        columnmapper = lambda t: f"$\\kappa={t[0]}, \\beta={t[1]}$",
+        legend_title = f"$\\kappa \\times \\beta$ ({paddingmode})",
+        legend_ncols = 5,
         ywindow_size = 7,
-        ywindow_mid = lambda bot, top: top - 7,
-        facets = [100,1000,10000,40472],
-        nrows = 1
-        ).savefig(f"/tmp/ngrams_kappa{kappa}_monsterplot_eta.pdf", format='pdf', dpi=1000)
+        ywindow_mid = lambda bot, top: top - 7
+        ).savefig(f"/tmp/plots/ngrams_{paddingmode}_omni_monsterplot_eta.pdf", format='pdf', dpi=1000)
+
+    for kappa in [1, 2, 3, 4, 5, 10]:
+        multi_facet_plot('ngrams',
+            filenames = [logroot + "/german_06-10_ngrams_omnitune.log", logroot + "/german_06-11_ngrams_eta0001.log", logroot + "/german_06-20_ngrams_etabetakappa_kappa4_le500.log", logroot + "/german_06-20_ngrams_etabetakappa_kappa4_gt500.log"],
+            series_names = ['beta'],
+            df_restricter = lambda df: restricter_and(df, dualmono_pad = paddingmode, kappa = kappa),
+            legend_title = f"$\\beta$ ($\\kappa = {kappa}$)",
+            ywindow_size = 7,
+            ywindow_mid = lambda bot, top: top - 7,
+            facets = [100,500,1000,10000],
+            nrows = 1
+            ).savefig(f"/tmp/plots/ngrams_{paddingmode}_kappa{kappa}_monsterplot_eta.pdf", format='pdf', dpi=1000)
