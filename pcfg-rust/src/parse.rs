@@ -276,10 +276,13 @@ pub fn agenda_cky_parse<'a>(
                     TerminalMatcher::LCSMatcher(ref mut embdr) => {
                         handle_terminals(embdr, &mut ckychart, &mut agenda, i, sentlen, ntcount, wsent, wsent_pos_desc, &mut bins, &mut fullmatches, &mut stats)
                     }
-                    TerminalMatcher::NGramMatcher(ref mut embdr) => {
+                    TerminalMatcher::PrefixSuffixMatcher(ref mut embdr) => {
+                        handle_terminals(embdr, &mut ckychart, &mut agenda, i, sentlen, ntcount, wsent, wsent_pos_desc, &mut bins, &mut fullmatches, &mut stats)
+                    }
+                    TerminalMatcher::LevenshteinMatcher(ref mut embdr) => {
                         handle_terminals(embdr, &mut ckychart, &mut agenda, i, sentlen, ntcount, wsent, wsent_pos_desc, &mut bins, &mut fullmatches, &mut stats)
                     },
-                    TerminalMatcher::LevenshteinMatcher(ref mut embdr) => {
+                    TerminalMatcher::NGramMatcher(ref mut embdr) => {
                         handle_terminals(embdr, &mut ckychart, &mut agenda, i, sentlen, ntcount, wsent, wsent_pos_desc, &mut bins, &mut fullmatches, &mut stats)
                     }
                 }

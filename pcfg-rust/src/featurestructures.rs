@@ -7,8 +7,9 @@ pub enum TerminalMatcher {
     ExactMatcher (ExactEmbedder),
     POSTagMatcher (POSTagEmbedder),
     LCSMatcher (LCSEmbedder),
-    NGramMatcher (NGramEmbedder),
-    LevenshteinMatcher(LevenshteinEmbedder)
+    PrefixSuffixMatcher (PrefixSuffixEmbedder),
+    LevenshteinMatcher(LevenshteinEmbedder),
+    NGramMatcher (NGramEmbedder)
 }
 
 fn get_id<T: Clone + Eq + ::std::hash::Hash>(w: &T, id2e: &mut Vec<T>, e2id: &mut HashMap<T, usize>) -> usize {
@@ -181,6 +182,105 @@ impl IsEmbedding for LCSEmbedder {
     }
 }
 
+pub struct PrefixSuffixEmbedder {
+    e_id_to_rules: Vec<(usize, Vec<(String, NT, f64)>)>,
+    id2e: Vec<Vec<char>>,
+    e2id: HashMap<Vec<char>, usize>,
+    
+    alpha: f64,
+    omega: f64,
+    tau: f64,
+    decay: bool
+}
+impl PrefixSuffixEmbedder {
+    fn cp_len<T: Eq + ::std::fmt::Display>(a: &[T], b: &[T]) -> usize {
+        let al = a.len();
+        let bl = b.len();
+        let mut l = 0;
+        while l < al && l < bl && a[l] == b[l] {
+            l += 1
+        }
+        return l
+    }
+    fn cs_len<T: Eq + ::std::fmt::Display>(a: &[T], b: &[T]) -> usize {
+        let al = a.len();
+        let bl = b.len();
+        let mut l = 0;
+        while l < al && l < bl && a[al-l-1] == b[bl-l-1] {
+            l += 1;
+            // println!("{}<{} {}<{}", l, a.len(), l, b.len());
+            // println!("{} {}", a[al-l-1], b[bl-l-1]);
+        }
+        return l
+    }
+    #[inline]
+    fn geom_upto_i(&self, k: i32) -> f64 {
+        (1.0 - self.tau.powi(k)) / (1.0 - self.tau)
+    }
+    #[inline]
+    fn geom_upto_f(&self, k: f64) -> f64 {
+        (1.0 - self.tau.powf(k)) / (1.0 - self.tau)
+    }
+}
+impl IsEmbedding for PrefixSuffixEmbedder {
+    fn get_e_id_to_rules(&self) -> &Vec<(usize, Vec<(String, NT, f64)>)> {&self.e_id_to_rules}
+    fn get_e_id_to_rules_mut(&mut self) -> &mut Vec<(usize, Vec<(String, NT, f64)>)> {&mut self.e_id_to_rules}
+    
+    fn comp(&self, erule: usize, esent: usize) -> f64 {
+        let lrule: f64 = self.id2e[erule].len() as f64;
+        let lsent: f64 = self.id2e[esent].len() as f64;
+        let cplen: i32 = PrefixSuffixEmbedder::cp_len(self.id2e[erule].as_slice(), self.id2e[esent].as_slice()) as i32;
+        let cslen: i32 = PrefixSuffixEmbedder::cs_len(self.id2e[erule].as_slice(), self.id2e[esent].as_slice()) as i32;
+        let w_avg: f64 = self.alpha * lrule + (1.0-self.alpha) * lsent;
+        
+        let (cp, cs, dn) = if !self.decay {
+            (cplen as f64, cslen as f64, w_avg)
+        } else {
+            (self.geom_upto_i(cplen), self.geom_upto_i(cslen), self.geom_upto_f(w_avg))
+        };
+        
+        ((1.0 - self.omega) * cp + self.omega * cs) / dn
+    }
+    fn embed_rule(&mut self, rule: &(&str, NT, f64)) -> usize {
+        let &(w, _, _) = rule;
+        let e = w.chars().collect();
+        get_id(&e, &mut self.id2e, &mut self.e2id)
+    }
+    fn embed_sent(&mut self, w: &str, _: &Vec<(POSTag, f64)>) -> usize {
+        let e = w.chars().collect();
+        get_id(&e, &mut self.id2e, &mut self.e2id)
+    }
+}
+
+pub struct LevenshteinEmbedder {
+    e_id_to_rules: Vec<(usize, Vec<(String, NT, f64)>)>,
+    id2e: Vec<(String, usize)>,
+    e2id: HashMap<(String, usize), usize>
+}
+impl IsEmbedding for LevenshteinEmbedder {
+    fn get_e_id_to_rules(&self) -> &Vec<(usize, Vec<(String, NT, f64)>)> {&self.e_id_to_rules}
+    fn get_e_id_to_rules_mut(&mut self) -> &mut Vec<(usize, Vec<(String, NT, f64)>)> {&mut self.e_id_to_rules}
+    
+    fn comp(&self, erule: usize, esent: usize) -> f64 {
+        let (ref wrule, lrule) = self.id2e[erule];
+        let (ref wsent, lsent) = self.id2e[esent];
+        (1.0 -
+            (strsim::levenshtein(wsent, wrule) as f64)
+            /
+            (::std::cmp::max(lrule, lsent) as f64)
+        )
+    }
+    fn embed_rule(&mut self, rule: &(&str, NT, f64)) -> usize {
+        let &(w, _, _) = rule;
+        let e = (w.to_string(), w.chars().count());
+        get_id(&e, &mut self.id2e, &mut self.e2id)
+    }
+    fn embed_sent(&mut self, w: &str, _: &Vec<(POSTag, f64)>) -> usize {
+        let e = (w.to_string(), w.chars().count());
+        get_id(&e, &mut self.id2e, &mut self.e2id)
+    }
+}
+
 pub struct NGramEmbedder {
     e_id_to_rules: Vec<(usize, Vec<(String, NT, f64)>)>,
     id2e: Vec<BTreeSet<String>>,
@@ -242,35 +342,6 @@ impl IsEmbedding for NGramEmbedder {
     }
 }
 
-pub struct LevenshteinEmbedder {
-    e_id_to_rules: Vec<(usize, Vec<(String, NT, f64)>)>,
-    id2e: Vec<(String, usize)>,
-    e2id: HashMap<(String, usize), usize>
-}
-impl IsEmbedding for LevenshteinEmbedder {
-    fn get_e_id_to_rules(&self) -> &Vec<(usize, Vec<(String, NT, f64)>)> {&self.e_id_to_rules}
-    fn get_e_id_to_rules_mut(&mut self) -> &mut Vec<(usize, Vec<(String, NT, f64)>)> {&mut self.e_id_to_rules}
-    
-    fn comp(&self, erule: usize, esent: usize) -> f64 {
-        let (ref wrule, lrule) = self.id2e[erule];
-        let (ref wsent, lsent) = self.id2e[esent];
-        (1.0 -
-            (strsim::levenshtein(wsent, wrule) as f64)
-            /
-            (::std::cmp::max(lrule, lsent) as f64)
-        )
-    }
-    fn embed_rule(&mut self, rule: &(&str, NT, f64)) -> usize {
-        let &(w, _, _) = rule;
-        let e = (w.to_string(), w.chars().count());
-        get_id(&e, &mut self.id2e, &mut self.e2id)
-    }
-    fn embed_sent(&mut self, w: &str, _: &Vec<(POSTag, f64)>) -> usize {
-        let e = (w.to_string(), w.chars().count());
-        get_id(&e, &mut self.id2e, &mut self.e2id)
-    }
-}
-
 pub fn embed_rules(
     word_to_preterminal: &HashMap<String, Vec<(NT, f64)>>,
     bin_ntdict: &HashMap<NT, String>,
@@ -292,6 +363,11 @@ pub fn embed_rules(
             let mut embdr = LCSEmbedder { e_id_to_rules: Vec::new(), e2id: HashMap::new(), id2e: Vec::new(), alpha: stats.alpha };
             embdr.build_e_to_rules(word_to_preterminal);
             TerminalMatcher::LCSMatcher(embdr)
+        },
+        "prefixsuffix" => {
+            let mut embdr = PrefixSuffixEmbedder { e_id_to_rules: Vec::new(), e2id: HashMap::new(), id2e: Vec::new(), alpha: stats.alpha, omega: stats.omega, tau: stats.tau, decay: stats.decay };
+            embdr.build_e_to_rules(word_to_preterminal);
+            TerminalMatcher::PrefixSuffixMatcher(embdr)
         },
         "ngrams" => {
             let mut embdr = NGramEmbedder { e_id_to_rules: Vec::new(), e2id: HashMap::new(), id2e: Vec::new(), kappa: stats.kappa, dualmono_pad: stats.dualmono_pad, ngram_cache: HashMap::new() };

@@ -203,10 +203,13 @@ fn main() {
         dualmono_pad: false,
         logcompvalues: false,
         keepafterdash: false,
+        decay: false,
         eta: 0.06,
         alpha: 0.2,
         beta: 10.0,
         kappa: 3,
+        omega: 0.5,
+        tau: 0.8,
         all_terms_fallback: false,
         only_oovs_soft: false,
         exhaustive: false,
@@ -230,7 +233,7 @@ fn main() {
             "Value for uniform OOV preterminal assignment");
         ap.refer(&mut stats.feature_structures)
             .add_option(&["--featurestructures"], Store,
-            "Feature structures: exactmatch (default), postagsonly");
+            "Feature structures: exactmatch (default), postagsonly, lcsratio, prefixsuffix, ngrams, levenshtein");
         ap.refer(&mut stats.testtagsfile)
             .add_option(&["--testtagsfile"], Store,
             "POS tags of the test tag file, if parsing with --featurestructures=postagsonly");
@@ -240,6 +243,9 @@ fn main() {
         ap.refer(&mut stats.keepafterdash)
             .add_option(&["--keepafterdash"], StoreTrue,
             "Keep everything after a - from SPMRL NTs (e.g., NP-SBJ instead of NP)");
+        ap.refer(&mut stats.decay)
+            .add_option(&["--decay"], StoreTrue,
+            "use decaying weights (with hyperparameter tau) in PrefixSuffixMatcher");
         ap.refer(&mut stats.eta)
             .add_option(&["--eta"], Store,
             "Softness factor (default: 0.06)");
@@ -252,6 +258,12 @@ fn main() {
         ap.refer(&mut stats.kappa)
             .add_option(&["--kappa"], Store,
             "Hyperparameter kappa (default: 1)");
+        ap.refer(&mut stats.omega)
+            .add_option(&["--omega"], Store,
+            "Hyperparameter omega (default: 0.5)");
+        ap.refer(&mut stats.tau)
+            .add_option(&["--tau"], Store,
+            "Hyperparameter tau (default: 0.8)");
         ap.refer(&mut stats.dualmono_pad)
             .add_option(&["--dualmono-pad"], StoreTrue,
             "grams = window(###word) ∪ window(word###) - instead of the standard grams = window(###word###)");
