@@ -176,7 +176,7 @@ def simplify_postags_file(s):
 #     columnmapper = simplify_postags_file,
 #     aggregator = np.mean, # all tags when ts=all...
 #     legend_title = 'tagger trained on',
-# 	legend_extraspace = 0.05
+#     legend_extraspace = 0.05
 #     ).savefig('/tmp/plots/tagged_monsterplot_eta.pdf', format='pdf', dpi=1000)
 # 
 # multi_facet_plot('lcsratio',
@@ -202,11 +202,22 @@ def simplify_postags_file(s):
 #     x_name = 'beta',
 #     x_title = '$\\beta$',
 #     facet_name = 'eta',
-# 	facet_title = "$\\eta$",
-# 	facets = [0.006, 0.06, 0.6],
+#     facet_title = "$\\eta$",
+#     facets = [0.006, 0.06, 0.6],
 #     nrows = 1
 #     ).savefig('/tmp/plots/lcsratio_betaplot.pdf', format='pdf', dpi=1000)
-# 
+
+multi_facet_plot('prefixsuffix',
+    filenames = [logroot + "/german_06-21_prefixsuffix_ts500.log"],
+    series_names = ['beta', 'tau'],
+	columnmapper = lambda t: f"({t[0]}, {t[1]})",
+    legend_title = '$\\beta \\times \\tau$',
+    ywindow_size = 7,
+    ywindow_mid = lambda bot, top: top - 7,
+	facets = [500, 1000],
+	nrows = 1
+    ).savefig('/tmp/plots/prefixsuffix_omega05.pdf', format='pdf', dpi=1000)
+
 # multi_facet_plot('levenshtein',
 #     filenames = [logroot + "/german_megatune.log", logroot + "/german_apocalypsetune_coarse.log"],
 #     series_names = ['beta'],
@@ -225,44 +236,44 @@ def simplify_postags_file(s):
 # 	facets = [0.006, 0.06, 0.6],
 #     nrows = 1
 #     ).savefig('/tmp/plots/levenshtein_betaplot.pdf', format='pdf', dpi=1000)
-
-# LOTS OF NGRAMS STUFF
-
-for (date, scenario) in [(19, "eta006_beta10"), (21, "optimal")]:
-    multi_facet_plot('ngrams',
-        filenames = [logroot + f"/german_06-{date}_ngrams_kappatune_{scenario}.log"],
-        series_names = ['dualmono_pad'],
-        legend_title = "padding",
-        df_restricter = lambda df: df[df["kappa"] <= 10],
-        x_name = 'kappa',
-        x_title = '$\\kappa$',
-        facet_name = 'trainsize',
-        facets = [100, 500, 1000, 10000],
-        nrows = 1,
-        legend_right = False,
-        ywindow_size = 2
-        ).savefig(f"/tmp/plots/ngrams_kappatune_{scenario}.pdf", format='pdf', dpi=1000)
-
-for paddingmode in ['fullpad', 'dualmonopad']:
-    multi_facet_plot('ngrams',
-        filenames = [logroot + "/german_06-10_ngrams_omnitune.log", logroot + "/german_06-11_ngrams_eta0001.log", logroot + "/german_06-20_ngrams_etabetakappa_kappa4_le500.log", logroot + "/german_06-20_ngrams_etabetakappa_kappa4_gt500.log"],
-        series_names = ['kappa','beta'],
-        df_restricter = lambda df: restricter_and(df, dualmono_pad = paddingmode),
-        columnmapper = lambda t: f"$\\kappa={t[0]}, \\beta={t[1]}$",
-        legend_title = f"$\\kappa \\times \\beta$ ({paddingmode})",
-        legend_ncols = 5,
-        ywindow_size = 7,
-        ywindow_mid = lambda bot, top: top - 7
-        ).savefig(f"/tmp/plots/ngrams_{paddingmode}_omni_monsterplot_eta.pdf", format='pdf', dpi=1000)
-
-    for kappa in [1, 2, 3, 4, 5, 10]:
-        multi_facet_plot('ngrams',
-            filenames = [logroot + "/german_06-10_ngrams_omnitune.log", logroot + "/german_06-11_ngrams_eta0001.log", logroot + "/german_06-20_ngrams_etabetakappa_kappa4_le500.log", logroot + "/german_06-20_ngrams_etabetakappa_kappa4_gt500.log"],
-            series_names = ['beta'],
-            df_restricter = lambda df: restricter_and(df, dualmono_pad = paddingmode, kappa = kappa),
-            legend_title = f"$\\beta$ ($\\kappa = {kappa}$)",
-            ywindow_size = 7,
-            ywindow_mid = lambda bot, top: top - 7,
-            facets = [100,500,1000,10000],
-            nrows = 1
-            ).savefig(f"/tmp/plots/ngrams_{paddingmode}_kappa{kappa}_monsterplot_eta.pdf", format='pdf', dpi=1000)
+# 
+# # LOTS OF NGRAMS STUFF
+# 
+# for (date, scenario) in [(19, "eta006_beta10"), (21, "optimal")]:
+#     multi_facet_plot('ngrams',
+#         filenames = [logroot + f"/german_06-{date}_ngrams_kappatune_{scenario}.log"],
+#         series_names = ['dualmono_pad'],
+#         legend_title = "padding",
+#         df_restricter = lambda df: df[df["kappa"] <= 10],
+#         x_name = 'kappa',
+#         x_title = '$\\kappa$',
+#         facet_name = 'trainsize',
+#         facets = [100, 500, 1000, 10000],
+#         nrows = 1,
+#         legend_right = False,
+#         ywindow_size = 2
+#         ).savefig(f"/tmp/plots/ngrams_kappatune_{scenario}.pdf", format='pdf', dpi=1000)
+# 
+# for paddingmode in ['fullpad', 'dualmonopad']:
+#     multi_facet_plot('ngrams',
+#         filenames = [logroot + "/german_06-10_ngrams_omnitune.log", logroot + "/german_06-11_ngrams_eta0001.log", logroot + "/german_06-20_ngrams_etabetakappa_kappa4_le500.log", logroot + "/german_06-20_ngrams_etabetakappa_kappa4_gt500.log"],
+#         series_names = ['kappa','beta'],
+#         df_restricter = lambda df: restricter_and(df, dualmono_pad = paddingmode),
+#         columnmapper = lambda t: f"$\\kappa={t[0]}, \\beta={t[1]}$",
+#         legend_title = f"$\\kappa \\times \\beta$ ({paddingmode})",
+#         legend_ncols = 5,
+#         ywindow_size = 7,
+#         ywindow_mid = lambda bot, top: top - 7
+#         ).savefig(f"/tmp/plots/ngrams_{paddingmode}_omni_monsterplot_eta.pdf", format='pdf', dpi=1000)
+# 
+#     for kappa in [1, 2, 3, 4, 5, 10]:
+#         multi_facet_plot('ngrams',
+#             filenames = [logroot + "/german_06-10_ngrams_omnitune.log", logroot + "/german_06-11_ngrams_eta0001.log", logroot + "/german_06-20_ngrams_etabetakappa_kappa4_le500.log", logroot + "/german_06-20_ngrams_etabetakappa_kappa4_gt500.log"],
+#             series_names = ['beta'],
+#             df_restricter = lambda df: restricter_and(df, dualmono_pad = paddingmode, kappa = kappa),
+#             legend_title = f"$\\beta$ ($\\kappa = {kappa}$)",
+#             ywindow_size = 7,
+#             ywindow_mid = lambda bot, top: top - 7,
+#             facets = [100,500,1000,10000],
+#             nrows = 1
+#             ).savefig(f"/tmp/plots/ngrams_{paddingmode}_kappa{kappa}_monsterplot_eta.pdf", format='pdf', dpi=1000)

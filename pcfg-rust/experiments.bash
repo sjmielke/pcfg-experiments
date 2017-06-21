@@ -6,7 +6,7 @@ echo $'language\ttrainsize\tunbin_nts\tbin_nts\toov_handling\tuniform_oov_prob\t
 PCFGR="/home/student/mielke/pcfg-experiments/pcfg-rust/target/release/pcfg-rust --wsjpath=/home/student/mielke/ptb3/parsed/mrg/wsj --spmrlpath=/home/student/mielke/SPMRL_SHARED_2014"
 
 #   ETAVALS="0.0 0.001 0.003 0.006 0.01 0.03 0.06 0.1 0.3 0.6 0.95 1.0"
-   ETAVALS="0.0 0.006 0.06 0.6 1.0"
+   ETAVALS="0.0 0.001 0.006 0.01 0.06 0.1 0.6 1.0"
   BETAVALS="1.0 2.0 5.0 10.0 20.0"
 #TRAINSIZES="100 500 1000 5000 10000 40472"
 TRAINSIZES="100 500 1000 10000"
@@ -63,6 +63,27 @@ lcsratio-alphatune() {
 	wait
 }
 
+feat-prefixsuffix() {
+  # not tuning omega and alpha :(
+	for beta in $BETAVALS; do
+		for tau in 0.01 0.1 0.25 0.5 0.75 1.0; do
+			for eta in $ETAVALS; do
+				$PCFGR --language=$1 --trainsize=$2 --eta=$eta --beta=$beta --featurestructures=prefixsuffix --tau=$tau &
+			done
+			wait
+		done
+	done
+}
+
+feat-levenshtein() {
+	for beta in $BETAVALS; do
+		for eta in $ETAVALS; do
+			$PCFGR --language=$1 --trainsize=$2 --eta=$eta --beta=$beta --featurestructures=levenshtein --beta=$beta &
+		done
+		wait
+	done
+}
+
 feat-ngrams() {
 	for padmode in '' '--dualmono-pad'; do
 		for kappa in 1 2 3 4 5 10; do
@@ -100,23 +121,16 @@ ngrams-kappatune-optimal() {
 	done
 }
 
-feat-levenshtein() {
-	for beta in $BETAVALS; do
-		for eta in $ETAVALS; do
-			$PCFGR --language=$1 --trainsize=$2 --eta=$eta --beta=$beta --featurestructures=levenshtein --beta=$beta &
-		done
-		wait
-	done
-}
-
 for trainsize in $TRAINSIZES; do
-	# run-baselines             German "$trainsize"
-	# feat-goldtags             German "$trainsize"
-	# feat-varitags             German "$trainsize"
-	# feat-lcsratio             German "$trainsize"
-	# lcsratio-alphatune        German "$trainsize"
-	# feat-ngrams               German "$trainsize"
-	# ngrams-kappatune-constant German "$trainsize"
-	ngrams-kappatune-optimal  German "$trainsize"
-	# feat-levenshtein          German "$trainsize"
+# 	run-baselines             German "$trainsize"
+# 	feat-goldtags             German "$trainsize"
+# 	feat-varitags             German "$trainsize"
+# 	feat-lcsratio             German "$trainsize"
+	feat-prefixsuffix         German "$trainsize"
+# 	lcsratio-alphatune        German "$trainsize"
+# 	feat-levenshtein          German "$trainsize"
+# 	feat-ngrams               German "$trainsize"
+# 	ngrams-kappatune-constant German "$trainsize"
+# 	ngrams-kappatune-optimal  German "$trainsize"
 done
+
