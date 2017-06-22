@@ -1,8 +1,5 @@
 #! /bin/bash
 
-#echo $''
-echo $'language\ttrainsize\tunbin_nts\tbin_nts\toov_handling\tuniform_oov_prob\tfeature_structures\ttesttagsfile\tnbesttags\tdualmono_pad\tlogcompvalues\tkeepafterdash\teta\talpha\tbeta\tkappa\tomega\ttau\tall_terms_fallback\tonly_oovs_soft\texhaustive\tgram_ext_bin\tcky_prep\tcky_terms\tcky_higher\toov_words\toov_sents\tparsefails\tfmeasure\tfmeasure (fail ok)\ttagaccuracy'
-
 PCFGR="/home/student/mielke/pcfg-experiments/pcfg-rust/target/release/pcfg-rust --wsjpath=/home/student/mielke/ptb3/parsed/mrg/wsj --spmrlpath=/home/student/mielke/SPMRL_SHARED_2014"
 
 #   ETAVALS="0.0 0.001 0.003 0.006 0.01 0.03 0.06 0.1 0.3 0.6 0.95 1.0"
@@ -63,8 +60,8 @@ lcsratio-alphatune() {
 	wait
 }
 
-feat-prefixsuffix() {
-  # not tuning omega and alpha :(
+feat-prefixsuffix-eta-beta-tau() {
+	# not tuning omega and alpha :(
 	for beta in $BETAVALS; do
 		for tau in 0.01 0.1 0.25 0.5 0.75 1.0; do
 			for eta in $ETAVALS; do
@@ -72,6 +69,16 @@ feat-prefixsuffix() {
 			done
 			wait
 		done
+	done
+}
+
+feat-prefixsuffix-omega-alpha() {
+	# not tuning eta, beta and tau :(
+	for omega in 0.0 0.125 0.25 0.375 0.5 0.625 0.75 0.875 1.0; do
+		for alpha in 0.0 0.125 0.25 0.375 0.5 0.625 0.75 0.875 1.0; do
+			$PCFGR --language=$1 --trainsize=$2 --eta=0.6 --beta=10 --featurestructures=prefixsuffix --tau=0.5 --alpha=$alpha --omega=$omega &
+		done
+		wait
 	done
 }
 
@@ -121,16 +128,69 @@ ngrams-kappatune-optimal() {
 	done
 }
 
-for trainsize in $TRAINSIZES; do
-# 	run-baselines             German "$trainsize"
-# 	feat-goldtags             German "$trainsize"
-# 	feat-varitags             German "$trainsize"
-# 	feat-lcsratio             German "$trainsize"
-	feat-prefixsuffix         German "$trainsize"
-# 	lcsratio-alphatune        German "$trainsize"
-# 	feat-levenshtein          German "$trainsize"
-# 	feat-ngrams               German "$trainsize"
-# 	ngrams-kappatune-constant German "$trainsize"
-# 	ngrams-kappatune-optimal  German "$trainsize"
-done
+tune() {
+	echo $'language\ttrainsize\tunbin_nts\tbin_nts\toov_handling\tuniform_oov_prob\tfeature_structures\ttesttagsfile\tnbesttags\tdualmono_pad\tlogcompvalues\tkeepafterdash\teta\talpha\tbeta\tkappa\tomega\ttau\tall_terms_fallback\tonly_oovs_soft\texhaustive\tgram_ext_bin\tcky_prep\tcky_terms\tcky_higher\toov_words\toov_sents\tparsefails\tfmeasure\tfmeasure (fail ok)\ttagaccuracy'
 
+	for trainsize in $TRAINSIZES; do
+	# 	run-baselines                  German "$trainsize"
+	# 	feat-goldtags                  German "$trainsize"
+	# 	feat-varitags                  German "$trainsize"
+	# 	feat-lcsratio                  German "$trainsize"
+	# 	feat-prefixsuffix-eta-beta-tau German "$trainsize"
+	 	feat-prefixsuffix-omega-alpha   German "$trainsize"
+	# 	feat-prefixsuffix              German "$trainsize"
+	# 	lcsratio-alphatune             German "$trainsize"
+	# 	feat-levenshtein               German "$trainsize"
+	# 	feat-ngrams                    German "$trainsize"
+	# 	ngrams-kappatune-constant      German "$trainsize"
+	# 	ngrams-kappatune-optimal       German "$trainsize"
+	done
+}
+
+morfessor-my-train() {
+	TRAINING_TEXT="$1"
+	MODEL_PREFIX="$2"
+	
+	morfessor-train "$TRAINING_TEXT" -S "${MODEL_PREFIX}.baseline.gz"
+	
+	flatcat-train "${MODEL_PREFIX}.baseline.gz" \
+		--category-separator '|' \
+		-p 100 \
+		-s "${MODEL_PREFIX}.fc_analysis.tar.gz" \
+		--save-parameters "${MODEL_PREFIX}.fc_parameters.txt"
+}
+
+morfessor-my-segment() {
+	MODEL_PREFIX="$1"
+	INCOMING="$2"
+	OUTGOING="$3"
+	
+	flatcat-segment \
+		--load-parameters "${MODEL_PREFIX}.fc_parameters.txt" \
+		--output-format '{analysis} ' \
+		--output-categories \
+		--output-newlines \
+		--output-category-separator '|' \
+		--category-separator '|' \
+		--remove-nonmorpheme \
+		"${MODEL_PREFIX}.fc_analysis.tar.gz" \
+		"$INCOMING" \
+	> "$OUTGOING"
+
+	paste -d '\n' \
+		<(sed 's/^/Source             : /;s/$/\nDELMEDELMEDELME/' "$INCOMING") \
+		<(sed 's/^/morf-Source-flat   : /;s/$/\n/'                "$OUTGOING") \
+		| sed '/DELMEDELMEDELME/d' \
+		> "$OUTGOING.viz"
+}
+
+morfize() {
+	TEXTFILE_TRAIN="/home/sjm/documents/Uni/FuzzySP/spmrl-2014/data/GERMAN_SPMRL/gold/ptb/train/train.German.gold.ptb.tobeparsed.raw"
+	TEXTFILE_DEVEL="/home/sjm/documents/Uni/FuzzySP/spmrl-2014/data/GERMAN_SPMRL/gold/ptb/dev/dev.German.gold.ptb.tobeparsed.raw"
+	MODEL_PREFIX="/home/sjm/documents/Uni/FuzzySP/pcfg-experiments/morfessor/SPMRL.German"
+	morfessor-my-train "$TEXTFILE_TRAIN" "$MODEL_PREFIX"
+	morfessor-my-segment "$MODEL_PREFIX" "$TEXTFILE_TRAIN" "$MODEL_PREFIX.train.flatcatized.txt"
+	morfessor-my-segment "$MODEL_PREFIX" "$TEXTFILE_DEVEL" "$MODEL_PREFIX.dev.flatcatized.txt"
+}
+
+morfize

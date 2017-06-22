@@ -217,7 +217,7 @@ multi_facet_plot('prefixsuffix',
     ywindow_size = 7,
     ywindow_mid = lambda bot, top: top - 7,
 	facets = [100, 500, 1000, 10000],
-    df_restricter = lambda df: restricter_and(df, beta = 1.0),
+    df_restricter = lambda df: restricter_and(df, beta = 10),
 	nrows = 1
     ).savefig('/tmp/plots/prefixsuffix_alpha02_omega05.pdf', format='pdf', dpi=1000)
 
