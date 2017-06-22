@@ -154,7 +154,7 @@ morfessor-my-train() {
 	morfessor-train "$TRAINING_TEXT" -S "${MODEL_PREFIX}.baseline.gz"
 	
 	flatcat-train "${MODEL_PREFIX}.baseline.gz" \
-		--category-separator '|' \
+		--category-separator '#' \
 		-p 100 \
 		-s "${MODEL_PREFIX}.fc_analysis.tar.gz" \
 		--save-parameters "${MODEL_PREFIX}.fc_parameters.txt"
@@ -170,8 +170,8 @@ morfessor-my-segment() {
 		--output-format '{analysis} ' \
 		--output-categories \
 		--output-newlines \
-		--output-category-separator '|' \
-		--category-separator '|' \
+		--output-category-separator '#' \
+		--category-separator '#' \
 		--remove-nonmorpheme \
 		"${MODEL_PREFIX}.fc_analysis.tar.gz" \
 		"$INCOMING" \
@@ -179,18 +179,22 @@ morfessor-my-segment() {
 
 	paste -d '\n' \
 		<(sed 's/^/Source             : /;s/$/\nDELMEDELMEDELME/' "$INCOMING") \
-		<(sed 's/^/morf-Source-flat   : /;s/$/\n/'                "$OUTGOING") \
+		<(sed 's/^/morf-Source-flat   : /;s/$/\n/;s/#/|/g'        "$OUTGOING") \
 		| sed '/DELMEDELMEDELME/d' \
 		> "$OUTGOING.viz"
 }
 
 morfize() {
-	TEXTFILE_TRAIN="/home/sjm/documents/Uni/FuzzySP/spmrl-2014/data/GERMAN_SPMRL/gold/ptb/train/train.German.gold.ptb.tobeparsed.raw"
-	TEXTFILE_DEVEL="/home/sjm/documents/Uni/FuzzySP/spmrl-2014/data/GERMAN_SPMRL/gold/ptb/dev/dev.German.gold.ptb.tobeparsed.raw"
-	MODEL_PREFIX="/home/sjm/documents/Uni/FuzzySP/pcfg-experiments/morfessor/SPMRL.German"
+	LANG="$1"
+	TEXTFILE_TRAIN=$(ls /home/sjm/documents/Uni/FuzzySP/spmrl-2014/data/${LANG}_SPMRL/gold/ptb/train/train.*.gold.ptb.tobeparsed.raw)
+	TEXTFILE_DEVEL=$(ls /home/sjm/documents/Uni/FuzzySP/spmrl-2014/data/${LANG}_SPMRL/gold/ptb/dev/dev.*.gold.ptb.tobeparsed.raw)
+	MODEL_PREFIX="/home/sjm/documents/Uni/FuzzySP/pcfg-experiments/morfessor/SPMRL.${LANG}"
 	morfessor-my-train "$TEXTFILE_TRAIN" "$MODEL_PREFIX"
 	morfessor-my-segment "$MODEL_PREFIX" "$TEXTFILE_TRAIN" "$MODEL_PREFIX.train.flatcatized.txt"
 	morfessor-my-segment "$MODEL_PREFIX" "$TEXTFILE_DEVEL" "$MODEL_PREFIX.dev.flatcatized.txt"
 }
 
-morfize
+morfize GERMAN
+morfize KOREAN
+morfize FRENCH
+morfize ARABIC
