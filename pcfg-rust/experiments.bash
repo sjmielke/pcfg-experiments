@@ -200,3 +200,23 @@ morfize() {
 # morfize FRENCH
 # morfize ARABIC
 tune
+
+
+berkeley-calls() {
+	javac edu/berkeley/nlp/PCFGLA/*.java && \
+	
+	java edu.berkeley.nlp.PCFGLA.GrammarTrainer \
+		-path /home/sjm/documents/Uni/FuzzySP/spmrl-2014/data/GERMAN_SPMRL/gold/ptb/train5k/train5k.German.gold.ptb \
+		-out /tmp/bp/grammar \
+		-treebank SINGLEFILE \
+		-SMcycles 0 -sm1 0 -sm2 0
+	
+	# java edu.berkeley.nlp.PCFGLA.WriteGrammarToTextFile /tmp/bp/grammar /tmp/bp/grammar
+	
+	# java edu.berkeley.nlp.PCFGLA.BerkeleyParser -gr /tmp/bp/grammar -inputFile <(echo "Ich sah ein Objekt in der Ferne .")
+	
+	java edu.berkeley.nlp.PCFGLA.GrammarTester \
+		-in /tmp/bp/grammar \
+		-path <(head -n 100 /home/sjm/documents/Uni/FuzzySP/spmrl-2014/data/GERMAN_SPMRL/gold/ptb/dev/dev.German.gold.ptb) \
+		-treebank SINGLEFILE
+}

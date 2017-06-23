@@ -11,6 +11,9 @@ plt.rc('text', usetex=True)
 plt.rc('font', family='serif', serif=['charter'])
 markers = ['v','^','<','>','X','o','D','d']
 
+dpi = 1000
+scale = 0.9
+
 logroot = "/home/sjm/documents/Uni/FuzzySP/pcfg-experiments/logs/"
 
 def join_file_frames(filenames, indices):
@@ -84,8 +87,11 @@ def multi_facet_plot(
         else:
             xsize, ysize = 5, 3.75
     
+    xsize = xsize * scale
+    ysize = ysize * scale
+    
     fig, ax = plt.subplots(nrows, ncols, squeeze=False, figsize=(xsize, ysize)) #, sharex=True) #, sharey=True)
-
+    
     for j in range(nrows):
         for i in range(ncols):
             facet = facets[i + ncols*j]
@@ -145,7 +151,7 @@ def multi_facet_plot(
     
     if legend_right:
         fig.legend(ax[0][0].get_lines(), all_series, 'right', title=legend_title, ncol=1, fontsize=9 if facet_name else 7)
-        fig.tight_layout(rect=[0, 0, 1 - 0.05/ncols - 0.1 - legend_extraspace, 1])
+        fig.tight_layout(rect=[0, 0, 1 - 0.05/ncols - 0.075 - legend_extraspace, 1])
     else:
         fig.legend(ax[0][0].get_lines(), all_series, 'lower center', title=legend_title, ncol=legend_ncols if legend_ncols else len(all_series), fontsize=9 if facet_name else 7)
         fig.tight_layout(rect=[0, 0.05/nrows + 0.05 + legend_extraspace, 1, 1])
@@ -182,7 +188,7 @@ multi_facet_plot('postagsonly',
     aggregator = np.mean, # all tags when ts=all...
     legend_title = 'tagger trained on',
     legend_extraspace = 0.05
-    ).savefig('/tmp/plots/tagged_monsterplot_eta.pdf', format='pdf', dpi=1000)
+    ).savefig('/tmp/plots/tagged_monsterplot_eta.pdf', format='pdf', dpi=dpi)
 
 multi_facet_plot('lcsratio',
     filenames = [logroot + "/german_megatune.log", logroot + "/german_apocalypsetune_coarse.log"],
@@ -190,7 +196,7 @@ multi_facet_plot('lcsratio',
     legend_title = '$\\beta$',
     ywindow_size = 7,
     ywindow_mid = lambda bot, top: top - 7
-    ).savefig('/tmp/plots/lcsratio_monsterplot_eta.pdf', format='pdf', dpi=1000)
+    ).savefig('/tmp/plots/lcsratio_monsterplot_eta.pdf', format='pdf', dpi=dpi)
 
 multi_facet_plot('lcsratio',
     filenames = [logroot + "/german_06-10_lcs_alphatune.log"],
@@ -199,7 +205,7 @@ multi_facet_plot('lcsratio',
     x_title = '$\\alpha$',
     facet_name = None,
     nrows = 1
-    ).savefig('/tmp/plots/lcsratio_alphaplot.pdf', format='pdf', dpi=1000)
+    ).savefig('/tmp/plots/lcsratio_alphaplot.pdf', format='pdf', dpi=dpi)
 
 multi_facet_plot('lcsratio',
     filenames = [logroot + "/german_megatune.log", logroot + "/german_apocalypsetune_coarse.log"],
@@ -212,7 +218,7 @@ multi_facet_plot('lcsratio',
     ywindow_size = 25,
     ywindow_mid = lambda _b, _t: 60,
     nrows = 1
-    ).savefig('/tmp/plots/lcsratio_betaplot.pdf', format='pdf', dpi=1000)
+    ).savefig('/tmp/plots/lcsratio_betaplot.pdf', format='pdf', dpi=dpi)
 
 multi_facet_plot('prefixsuffix',
     filenames = [logroot + "/german_06-21_prefixsuffix_alpha02_omega05.log"],
@@ -224,7 +230,7 @@ multi_facet_plot('prefixsuffix',
     facets = [100, 500, 1000, 10000],
     #df_restricter = lambda df: restricter_and(df, tau = 0.5),
     nrows = 1
-    ).savefig('/tmp/plots/prefixsuffix_alpha02_omega05.pdf', format='pdf', dpi=1000)
+    ).savefig('/tmp/plots/prefixsuffix_alpha02_omega05.pdf', format='pdf', dpi=dpi)
 
 multi_facet_plot('prefixsuffix',
     filenames = [logroot + "/german_06-23_prefixsuffix_eta06_beta10_tau05.log"],
@@ -236,7 +242,7 @@ multi_facet_plot('prefixsuffix',
     ywindow_mid = lambda bot, top: top - 5,
     facets = [100, 500, 1000, 10000],
     nrows = 1
-    ).savefig('/tmp/plots/prefixsuffix_eta06_beta10_tau05.pdf', format='pdf', dpi=1000)
+    ).savefig('/tmp/plots/prefixsuffix_eta06_beta10_tau05.pdf', format='pdf', dpi=dpi)
 
 multi_facet_plot('levenshtein',
     filenames = [logroot + "/german_megatune.log", logroot + "/german_apocalypsetune_coarse.log"],
@@ -244,7 +250,7 @@ multi_facet_plot('levenshtein',
     legend_title = '$\\beta$',
     ywindow_size = 7,
     ywindow_mid = lambda bot, top: top - 7
-    ).savefig('/tmp/plots/levenshtein_monsterplot_eta.pdf', format='pdf', dpi=1000)
+    ).savefig('/tmp/plots/levenshtein_monsterplot_eta.pdf', format='pdf', dpi=dpi)
 
 multi_facet_plot('levenshtein',
     filenames = [logroot + "/german_megatune.log", logroot + "/german_apocalypsetune_coarse.log"],
@@ -257,7 +263,7 @@ multi_facet_plot('levenshtein',
     ywindow_size = 25,
     ywindow_mid = lambda _b, _t: 60,
     nrows = 1
-    ).savefig('/tmp/plots/levenshtein_betaplot.pdf', format='pdf', dpi=1000)
+    ).savefig('/tmp/plots/levenshtein_betaplot.pdf', format='pdf', dpi=dpi)
 
 # LOTS OF NGRAMS STUFF
 
@@ -274,7 +280,7 @@ for (date, scenario) in [(19, "eta006_beta10"), (21, "optimal")]:
         nrows = 1,
         legend_right = False,
         ywindow_size = 2
-        ).savefig(f"/tmp/plots/ngrams_kappatune_{scenario}.pdf", format='pdf', dpi=1000)
+        ).savefig(f"/tmp/plots/ngrams_kappatune_{scenario}.pdf", format='pdf', dpi=dpi)
 
 for paddingmode in ['fullpad', 'dualmonopad']:
     multi_facet_plot('ngrams',
@@ -286,7 +292,7 @@ for paddingmode in ['fullpad', 'dualmonopad']:
         legend_ncols = 5,
         ywindow_size = 7,
         ywindow_mid = lambda bot, top: top - 7
-        ).savefig(f"/tmp/plots/ngrams_{paddingmode}_omni_monsterplot_eta.pdf", format='pdf', dpi=1000)
+        ).savefig(f"/tmp/plots/ngrams_{paddingmode}_omni_monsterplot_eta.pdf", format='pdf', dpi=dpi)
 
     for kappa in [1, 2, 3, 4, 5, 10]:
         multi_facet_plot('ngrams',
@@ -298,4 +304,4 @@ for paddingmode in ['fullpad', 'dualmonopad']:
             ywindow_mid = lambda bot, top: top - 7,
             facets = [100,500,1000,10000],
             nrows = 1
-            ).savefig(f"/tmp/plots/ngrams_{paddingmode}_kappa{kappa}_monsterplot_eta.pdf", format='pdf', dpi=1000)
+            ).savefig(f"/tmp/plots/ngrams_{paddingmode}_kappa{kappa}_monsterplot_eta.pdf", format='pdf', dpi=dpi)
