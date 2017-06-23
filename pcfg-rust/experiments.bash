@@ -75,7 +75,7 @@ feat-prefixsuffix-eta-beta-tau() {
 feat-prefixsuffix-omega-alpha() {
 	# not tuning eta, beta and tau :(
 	for omega in 0.0 0.125 0.25 0.375 0.5 0.625 0.75 0.875 1.0; do
-		for alpha in 0.0 0.125 0.25 0.375 0.5 0.625 0.75 0.875 1.0; do
+		for alpha in 0.0 0.2 0.4 0.6 0.8 1.0; do
 			$PCFGR --language=$1 --trainsize=$2 --eta=0.6 --beta=10 --featurestructures=prefixsuffix --tau=0.5 --alpha=$alpha --omega=$omega &
 		done
 		wait
@@ -137,7 +137,7 @@ tune() {
 	# 	feat-varitags                  German "$trainsize"
 	# 	feat-lcsratio                  German "$trainsize"
 	# 	feat-prefixsuffix-eta-beta-tau German "$trainsize"
-	 	feat-prefixsuffix-omega-alpha   German "$trainsize"
+		feat-prefixsuffix-omega-alpha   German "$trainsize"
 	# 	feat-prefixsuffix              German "$trainsize"
 	# 	lcsratio-alphatune             German "$trainsize"
 	# 	feat-levenshtein               German "$trainsize"
@@ -181,7 +181,8 @@ morfessor-my-segment() {
 		<(sed 's/^/Source             : /;s/$/\nDELMEDELMEDELME/' "$INCOMING") \
 		<(sed 's/^/morf-Source-flat   : /;s/$/\n/;s/#/|/g'        "$OUTGOING") \
 		| sed '/DELMEDELMEDELME/d' \
-		> "$OUTGOING.viz"
+		| head -n 100
+		> "$OUTGOING.100.viz"
 }
 
 morfize() {
@@ -194,7 +195,8 @@ morfize() {
 	morfessor-my-segment "$MODEL_PREFIX" "$TEXTFILE_DEVEL" "$MODEL_PREFIX.dev.flatcatized.txt"
 }
 
-morfize GERMAN
-morfize KOREAN
-morfize FRENCH
-morfize ARABIC
+# morfize GERMAN
+# morfize KOREAN
+# morfize FRENCH
+# morfize ARABIC
+tune
