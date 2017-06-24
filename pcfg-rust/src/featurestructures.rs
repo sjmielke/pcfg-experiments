@@ -102,7 +102,7 @@ impl IsEmbedding for POSTagEmbedder {
             }
             btm.insert(p.to_string(), LogProb(lp));
         }
-        assert_eq!(max_lp, 0.0);
+        // only if gold tags // assert_eq!(max_lp, 0.0);
         let e = (max_pos.to_string(), btm);
         get_id(&e, &mut self.id2e, &mut self.e2id)
     }

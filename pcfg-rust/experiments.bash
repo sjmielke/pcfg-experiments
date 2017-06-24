@@ -134,10 +134,10 @@ tune() {
 	for trainsize in $TRAINSIZES; do
 	# 	run-baselines                  German "$trainsize"
 	# 	feat-goldtags                  German "$trainsize"
-	# 	feat-varitags                  German "$trainsize"
+		feat-varitags                  German "$trainsize"
 	# 	feat-lcsratio                  German "$trainsize"
 	# 	feat-prefixsuffix-eta-beta-tau German "$trainsize"
-		feat-prefixsuffix-omega-alpha   German "$trainsize"
+	# 	feat-prefixsuffix-omega-alpha   German "$trainsize"
 	# 	feat-prefixsuffix              German "$trainsize"
 	# 	lcsratio-alphatune             German "$trainsize"
 	# 	feat-levenshtein               German "$trainsize"
