@@ -102,7 +102,7 @@ impl IsEmbedding for POSTagEmbedder {
             }
             btm.insert(p.to_string(), LogProb(lp));
         }
-        if !nbesttags {assert_eq!(max_lp, 0.0);}
+        // only if gold tags // assert_eq!(max_lp, 0.0);
         let e = (max_pos.to_string(), btm);
         get_id(&e, &mut self.id2e, &mut self.e2id)
     }
@@ -252,7 +252,9 @@ impl IsEmbedding for PrefixSuffixEmbedder {
 pub struct LevenshteinEmbedder {
     e_id_to_rules: Vec<(usize, Vec<(String, NT, f64)>)>,
     id2e: Vec<(String, usize)>,
-    e2id: HashMap<(String, usize), usize>
+    e2id: HashMap<(String, usize), usize>,
+    
+    alpha: f64
 }
 impl IsEmbedding for LevenshteinEmbedder {
     fn get_e_id_to_rules(&self) -> &Vec<(usize, Vec<(String, NT, f64)>)> {&self.e_id_to_rules}
@@ -262,9 +264,16 @@ impl IsEmbedding for LevenshteinEmbedder {
         let (ref wrule, lrule) = self.id2e[erule];
         let (ref wsent, lsent) = self.id2e[esent];
         (1.0 -
-            (strsim::levenshtein(wsent, wrule) as f64)
-            /
-            (::std::cmp::max(lrule, lsent) as f64)
+            (
+                (strsim::levenshtein(wsent, wrule) as f64)
+                /
+                (self.alpha * (lrule as f64) + (1.0 - self.alpha) * (lsent as f64))
+            ) *
+            0//(
+            //    (::std::cmp::min(lrule, lsent) as f64)
+            //    /
+            //    (::std::cmp::max(lrule, lsent) as f64)
+            //)
         )
     }
     fn embed_rule(&mut self, rule: &(&str, NT, f64)) -> usize {
@@ -372,7 +381,7 @@ pub fn embed_rules(
             TerminalMatcher::NGramMatcher(embdr)
         },
         "levenshtein" => {
-            let mut embdr = LevenshteinEmbedder { e_id_to_rules: Vec::new(), e2id: HashMap::new(), id2e: Vec::new() };
+            let mut embdr = LevenshteinEmbedder { e_id_to_rules: Vec::new(), e2id: HashMap::new(), id2e: Vec::new(), alpha: stats.alpha };
             embdr.build_e_to_rules(word_to_preterminal);
             TerminalMatcher::LevenshteinMatcher(embdr)
         },
