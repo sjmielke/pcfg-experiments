@@ -28,10 +28,20 @@ feat-goldtags() {
 	done
 }
 
-feat-varitags() {
+feat-varitags-1best() {
 	languc=$(echo $1 | tr [a-z] [A-Z])
-	for suffix in $2.gold "$2.pred" "40472.pred" "$2.pred --nbesttags" "40472.pred --nbesttags"; do
-		for beta in $BETAVALS; do
+	for suffix in "$2.gold" "$2.pred" "40472.pred"; do
+		for eta in $ETAVALS; do
+			$PCFGR --language=$1 --trainsize=$2 --eta=$eta --featurestructures=postagsonly --testtagsfile=../pos-tagging/data/spmrl.$languc.dev.sklearn_tagged.$suffix &
+		done
+		wait
+	done
+}
+
+feat-varitags-nbest() {
+	languc=$(echo $1 | tr [a-z] [A-Z])
+	for suffix in "$2.pred --nbesttags" "40472.pred --nbesttags"; do
+		for beta in 0.1 0.5 1.0 1.5 2.0 5.0; do
 			for eta in $ETAVALS; do
 				$PCFGR --language=$1 --trainsize=$2 --eta=$eta --beta=$beta --featurestructures=postagsonly --testtagsfile=../pos-tagging/data/spmrl.$languc.dev.sklearn_tagged.$suffix &
 			done
@@ -134,13 +144,14 @@ tune() {
 	for trainsize in $TRAINSIZES; do
 	# 	run-baselines                  German "$trainsize"
 	# 	feat-goldtags                  German "$trainsize"
-		feat-varitags                  German "$trainsize"
+	# 	feat-varitags-1best            German "$trainsize"
+	# 	feat-varitags-nbest            German "$trainsize"
 	# 	feat-lcsratio                  German "$trainsize"
 	# 	feat-prefixsuffix-eta-beta-tau German "$trainsize"
-	# 	feat-prefixsuffix-omega-alpha   German "$trainsize"
+	# 	feat-prefixsuffix-omega-alpha  German "$trainsize"
 	# 	feat-prefixsuffix              German "$trainsize"
 	# 	lcsratio-alphatune             German "$trainsize"
-	# 	feat-levenshtein               German "$trainsize"
+		feat-levenshtein               German "$trainsize"
 	# 	feat-ngrams                    German "$trainsize"
 	# 	ngrams-kappatune-constant      German "$trainsize"
 	# 	ngrams-kappatune-optimal       German "$trainsize"

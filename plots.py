@@ -38,7 +38,7 @@ def multi_facet_plot(
     x_title = '$\\eta$',
     df_restricter = None,
     columnmapper = None,
-    aggregator = np.mean,
+    aggregator = assert_singleton,
     legend_right = True,
     legend_title = None,
     legend_ncols = None,
@@ -53,7 +53,7 @@ def multi_facet_plot(
     # close previous plot to save memory
     plt.close()
     
-    indices = ['trainsize','feature_structures','oov_handling','eta','beta']
+    indices = ['language','trainsize','feature_structures','oov_handling','eta','beta']
     indices += [sn for sn in series_names if sn not in indices]
     
     df = join_file_frames(filenames, indices)
@@ -93,6 +93,20 @@ def multi_facet_plot(
     ysize = ysize * scale
     
     fig, ax = plt.subplots(nrows, ncols, squeeze=False, figsize=(xsize, ysize)) #, sharex=True) #, sharey=True)
+
+    # Make sure all series exist in each subplot
+    if columnmapper:
+        cm = columnmapper
+    else:
+        def cm(x):
+            [v] = x
+            return v
+        
+    series_indices = [df.index.names.index(sn) for sn in series_names]
+    all_series = [cm([t[i] for i in series_indices]) for t in df.index]
+    # OrderedDict is just an OrderedSet (values = None, are ignored)
+    all_series = OrderedDict.fromkeys(all_series)
+    all_series = list(all_series)
     
     for j in range(nrows):
         for i in range(ncols):
@@ -112,26 +126,14 @@ def multi_facet_plot(
                 if columnmapper:
                     plot_df.columns = plot_df.columns.map(columnmapper)
                     plot_df.sort_index(axis=1, inplace=True)
-                    cm = columnmapper
-                else:
-                    def cm(x):
-                        [v] = x
-                        return v
                 
-                series_indices = [df.index.names.index(sn) for sn in series_names]
-                
-                # Make sure all series exist in each subplot
-                all_series = [cm([t[i] for i in series_indices]) for t in df.index]
-                # OrderedDict is just an OrderedSet (values = None, are ignored)
-                all_series = OrderedDict.fromkeys(all_series)
-                all_series = list(all_series)
                 plot_df = plot_df.reindex(columns=all_series)
                 
                 # Now plot each w/ different marker
                 for (series, marker) in zip(plot_df.columns, itertools.cycle(markers)):
                     plot_df[series].plot(ax=ax[j][i], marker=marker, markersize=3)
             
-            if x_name == 'eta' or x_name == 'kappa':
+            if x_name in ['eta', 'kappa', 'trainsize']:
                 ax[j][i].set_xscale('symlog', linthreshx=0.001, linscalex=0.2)
             
             if x_name == 'kappa':
@@ -167,6 +169,11 @@ def restricter_and(df, **kvargs):
         df = df[df[k] == v]
     return df
 
+def restricter_lambdas(df, **kvargs):
+    for k, v in kvargs.items():
+        df = df[df[k].apply(v)]
+    return df
+
 def simplify_postags_file(s):
     if '.' not in s[0]:
         assert(s[1] == "1besttags")
@@ -182,22 +189,56 @@ def simplify_postags_file(s):
         return "all (40472), " + s[1][0] + "-best"
     else:
         return "trainsize" + ", " + s[1][0] + "-best"
-# 
+
+# MAX ON DEV
+
+multi_facet_plot(None,
+    # Add levenshtien portion back in from [logroot + "/german_megatune.log", logroot + "/german_apocalypsetune_coarse.log"]
+    filenames = [logroot + "/german_06-23_prefixsuffix_eta06_beta10_tau05.log", logroot + "/german_06-21_prefixsuffix_alpha02_omega05.log", logroot + "/german_06-10_lcs_alphatune.log", logroot + "/german_06-10_ngrams_omnitune.log", logroot + "/german_06-11_ngrams_eta0001.log", logroot + "/german_06-20_ngrams_etabetakappa_kappa4_le500.log", logroot + "/german_06-20_ngrams_etabetakappa_kappa4_gt500.log", logroot + "/german_06-23_prefixsuffix_eta06_beta10_tau05.log", logroot + "/german_06-21_prefixsuffix_alpha02_omega05.log", logroot + "/german_06-24_varitags_1best.log", logroot + "/german_06-24_varitags_nbest.log", logroot + "/german_06-26_varitags_1best_10k.log"],
+    df_restricter = lambda df: restricter_lambdas(df, testtagsfile = lambda f: "gold" not in f and "40472" not in f if isinstance(f, str) else True, trainsize = lambda ts: ts in [100,500,1000,10000], eta = lambda e: e > 0.0),
+    series_names = ['feature_structures'],
+    legend_title = "embedding",
+    x_name = 'trainsize',
+    facet_name = 'language',
+    facets = ["German"],
+    nrows = 1,
+    aggregator = np.max,
+    #legend_right = False
+    ).savefig('/tmp/plots/dev_optimum_per_trainsize.pdf', format='pdf', dpi=dpi)
+
+
 # # POS TAGS
-# 
-# multi_facet_plot('postagsonly',
-#     filenames = [logroot + "/german_megatune.log", logroot + "/german_apocalypsetune_coarse.log"],
-#     series_names = ['testtagsfile','nbesttags'],
-#     columnmapper = simplify_postags_file,
-#     aggregator = np.mean, # all tags when ts=all...
-#     legend_title = 'tagger trained on',
-#     legend_extraspace = 0.05
-#     ).savefig('/tmp/plots/tagged_monsterplot_eta.pdf', format='pdf', dpi=dpi)
-# 
+# # We could only ever tune beta on n-best, so let's do it for self-trained and 40472-trained
+
+multi_facet_plot('postagsonly',
+    filenames = [logroot + "/german_06-24_varitags_1best.log", logroot + "/german_06-24_varitags_nbest.log", logroot + "/german_06-26_varitags_1best_10k.log"],
+    series_names = ['beta'],
+    legend_title = '$\\beta$',
+    df_restricter = lambda df: restricter_lambdas(df, testtagsfile = lambda x: x[-4:] == 'pred' and "40472" not in x, nbesttags = lambda x: x == 'nbesttags', beta = lambda x: x > 0.1),
+    ).savefig(f"/tmp/plots/varitags_tsself_nbest_monsterplot_eta_beta.pdf", format='pdf', dpi=dpi)
+    
+multi_facet_plot('postagsonly',
+    filenames = [logroot + "/german_06-24_varitags_1best.log", logroot + "/german_06-24_varitags_nbest.log", logroot + "/german_06-26_varitags_1best_10k.log"],
+    series_names = ['beta'],
+    legend_title = '$\\beta$',
+    df_restricter = lambda df: restricter_lambdas(df, testtagsfile = lambda x: x[-4:] == 'pred' and "40472" in x, nbesttags = lambda x: x == 'nbesttags', beta = lambda x: x > 0.1),
+    ).savefig(f"/tmp/plots/varitags_ts40472_nbest_monsterplot_eta_beta.pdf", format='pdf', dpi=dpi)
+
+multi_facet_plot('postagsonly',
+    filenames = [logroot + "/german_06-24_varitags_1best.log", logroot + "/german_06-24_varitags_nbest.log", logroot + "/german_06-26_varitags_1best_10k.log"],
+    series_names = ['testtagsfile','nbesttags'],
+    columnmapper = simplify_postags_file,
+    #aggregator = np.mean, # all tags when ts=all...
+    df_restricter = lambda df: df[(df['nbesttags'] == '1besttags') | (df['beta'] == 1.5)],
+    legend_title = 'tagger trained on',
+    legend_extraspace = 0.05
+    ).savefig('/tmp/plots/varitags_taggers_monsterplot_eta.pdf', format='pdf', dpi=dpi)
+
+
 # # LCSRATIO
 # 
 # multi_facet_plot('lcsratio',
-#     filenames = [logroot + "/german_megatune.log", logroot + "/german_apocalypsetune_coarse.log"],
+#     filenames = [],
 #     series_names = ['beta'],
 #     legend_title = '$\\beta$',
 #     ywindow_size = 7,
@@ -214,7 +255,7 @@ def simplify_postags_file(s):
 #     ).savefig('/tmp/plots/lcsratio_alphaplot.pdf', format='pdf', dpi=dpi)
 # 
 # multi_facet_plot('lcsratio',
-#     filenames = [logroot + "/german_megatune.log", logroot + "/german_apocalypsetune_coarse.log"],
+#     filenames = [],
 #     series_names = ['trainsize'],
 #     x_name = 'beta',
 #     x_title = '$\\beta$',
@@ -315,20 +356,20 @@ def simplify_postags_file(s):
 #             facets = [100,500,1000,10000],
 #             nrows = 1
 #             ).savefig(f"/tmp/plots/ngrams_{paddingmode}_kappa{kappa}_monsterplot_eta.pdf", format='pdf', dpi=dpi)
-
-# ALL 40472
-
-multi_facet_plot(None,
-    filenames = [logroot + "/german_megatune.log", logroot + "/german_apocalypsetune_coarse.log", logroot + "/german_06-23_prefixsuffix_eta06_beta10_tau05.log", logroot + "/german_06-21_prefixsuffix_alpha02_omega05.log", logroot + "/german_06-10_lcs_alphatune.log"],
-    series_names = ['beta'],
-    df_restricter = lambda df: restricter_and(df, trainsize = 40472, alpha = 0.2, omega = 0.5),
-    x_name = 'eta',
-    x_title = '$\\eta$',
-    facet_name = 'feature_structures',
-    facet_title = "embedding",
-    facets = ["postagsonly", "lcsratio", "prefixsuffix", "levenshtein"],
-    nrows = 1,
-    ywindow_size = 5,
-    ywindow_mid = lambda _b, _t: 75,
-    legend_right = False
-    ).savefig('/tmp/plots/levenshtein_betaplot.pdf', format='pdf', dpi=dpi)
+# 
+# # ALL 40472
+# 
+# multi_facet_plot(None,
+#     filenames = [logroot + "/german_megatune.log", logroot + "/german_apocalypsetune_coarse.log", logroot + "/german_06-23_prefixsuffix_eta06_beta10_tau05.log", logroot + "/german_06-21_prefixsuffix_alpha02_omega05.log", logroot + "/german_06-10_lcs_alphatune.log"],
+#     series_names = ['beta'],
+#     df_restricter = lambda df: restricter_and(df, trainsize = 40472, alpha = 0.2, omega = 0.5),
+#     x_name = 'eta',
+#     x_title = '$\\eta$',
+#     facet_name = 'feature_structures',
+#     facet_title = "embedding",
+#     facets = ["postagsonly", "lcsratio", "prefixsuffix", "levenshtein"],
+#     nrows = 1,
+#     ywindow_size = 5,
+#     ywindow_mid = lambda _b, _t: 75,
+#     legend_right = False
+#     ).savefig('/tmp/plots/levenshtein_betaplot.pdf', format='pdf', dpi=dpi)
