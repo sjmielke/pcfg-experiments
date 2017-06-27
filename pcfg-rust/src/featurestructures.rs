@@ -269,11 +269,11 @@ impl IsEmbedding for LevenshteinEmbedder {
                 /
                 (self.alpha * (lrule as f64) + (1.0 - self.alpha) * (lsent as f64))
             ) *
-            0//(
-            //    (::std::cmp::min(lrule, lsent) as f64)
-            //    /
-            //    (::std::cmp::max(lrule, lsent) as f64)
-            //)
+            (
+                (::std::cmp::min(lrule, lsent) as f64)
+                /
+                (::std::cmp::max(lrule, lsent) as f64)
+            )
         )
     }
     fn embed_rule(&mut self, rule: &(&str, NT, f64)) -> usize {

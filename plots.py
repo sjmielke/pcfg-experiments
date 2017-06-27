@@ -42,7 +42,7 @@ def multi_facet_plot(
     legend_right = True,
     legend_title = None,
     legend_ncols = None,
-	legend_extraspace = 0.0,
+    legend_extraspace = 0.0,
     ywindow_size = None,
     ywindow_mid = lambda x, y: (x + y) / 2,
     facet_name = 'trainsize',
@@ -192,15 +192,25 @@ def simplify_postags_file(s):
 
 # MAX ON DEV
 
+def spacename(l):
+    [fs,nb,oh] = l
+    if l[0] == "postagsonly":
+        return f"self-trained {l[1][:5]} POS" 
+    elif l[0] == "exactmatch":
+        return f"hard ({l[2]})"
+    else:
+        return l[0]
+
 multi_facet_plot(None,
     # Add levenshtien portion back in from [logroot + "/german_megatune.log", logroot + "/german_apocalypsetune_coarse.log"]
-    filenames = [logroot + "/german_06-23_prefixsuffix_eta06_beta10_tau05.log", logroot + "/german_06-21_prefixsuffix_alpha02_omega05.log", logroot + "/german_06-10_lcs_alphatune.log", logroot + "/german_06-10_ngrams_omnitune.log", logroot + "/german_06-11_ngrams_eta0001.log", logroot + "/german_06-20_ngrams_etabetakappa_kappa4_le500.log", logroot + "/german_06-20_ngrams_etabetakappa_kappa4_gt500.log", logroot + "/german_06-23_prefixsuffix_eta06_beta10_tau05.log", logroot + "/german_06-21_prefixsuffix_alpha02_omega05.log", logroot + "/german_06-24_varitags_1best.log", logroot + "/german_06-24_varitags_nbest.log", logroot + "/german_06-26_varitags_1best_10k.log"],
+    filenames = [logroot + "/german_06-27_baselines.log", logroot + "/german_06-23_prefixsuffix_eta06_beta10_tau05.log", logroot + "/german_06-21_prefixsuffix_alpha02_omega05.log", logroot + "/german_06-10_lcs_alphatune.log", logroot + "/german_06-10_ngrams_omnitune.log", logroot + "/german_06-11_ngrams_eta0001.log", logroot + "/german_06-20_ngrams_etabetakappa_kappa4_le500.log", logroot + "/german_06-20_ngrams_etabetakappa_kappa4_gt500.log", logroot + "/german_06-23_prefixsuffix_eta06_beta10_tau05.log", logroot + "/german_06-21_prefixsuffix_alpha02_omega05.log", logroot + "/german_06-24_varitags_1best.log", logroot + "/german_06-24_varitags_nbest.log", logroot + "/german_06-26_varitags_1best_10k.log"],
     df_restricter = lambda df: restricter_lambdas(df, testtagsfile = lambda f: "gold" not in f and "40472" not in f if isinstance(f, str) else True, trainsize = lambda ts: ts in [100,500,1000,10000], eta = lambda e: e > 0.0),
-    series_names = ['feature_structures'],
+    series_names = ['feature_structures', 'nbesttags', 'oov_handling'],
+    columnmapper = spacename,
     legend_title = "embedding",
     x_name = 'trainsize',
     facet_name = 'language',
-    facets = ["German"],
+    facets = ["German","English"],
     nrows = 1,
     aggregator = np.max,
     #legend_right = False
@@ -292,16 +302,19 @@ multi_facet_plot('postagsonly',
 #     facets = [100, 500, 1000, 10000],
 #     nrows = 1
 #     ).savefig('/tmp/plots/prefixsuffix_eta06_beta10_tau05.pdf', format='pdf', dpi=dpi)
-# 
-# # LEVENSHTEIN
-# 
-# multi_facet_plot('levenshtein',
-#     filenames = [logroot + "/german_megatune.log", logroot + "/german_apocalypsetune_coarse.log"],
-#     series_names = ['beta'],
-#     legend_title = '$\\beta$',
-#     ywindow_size = 7,
-#     ywindow_mid = lambda bot, top: top - 7
-#     ).savefig('/tmp/plots/levenshtein_monsterplot_eta.pdf', format='pdf', dpi=dpi)
+
+# LEVENSHTEIN
+
+multi_facet_plot('levenshtein',
+    filenames = [logroot + "/german_06-27_levenshtein_alphaized.log"],
+    series_names = ['beta', 'alpha'],
+    legend_title = '$\\beta \\times \\alpha$',
+	columnmapper = lambda t: f"({t[0]}, {t[1]})",
+	legend_right = False,
+	legend_ncols = 10,
+    #ywindow_size = 7,
+    #ywindow_mid = lambda bot, top: top - 7
+    ).savefig('/tmp/plots/levenshtein_alphaized_monsterplot_eta.pdf', format='pdf', dpi=dpi)
 # 
 # multi_facet_plot('levenshtein',
 #     filenames = [logroot + "/german_megatune.log", logroot + "/german_apocalypsetune_coarse.log"],

@@ -93,11 +93,13 @@ feat-prefixsuffix-omega-alpha() {
 }
 
 feat-levenshtein() {
-	for beta in $BETAVALS; do
-		for eta in $ETAVALS; do
-			$PCFGR --language=$1 --trainsize=$2 --eta=$eta --beta=$beta --featurestructures=levenshtein --beta=$beta &
+	for alpha in 0.0 0.2 0.4 0.6 0.8 1.0; do
+		for beta in $BETAVALS; do
+			for eta in $ETAVALS; do
+				$PCFGR --language=$1 --trainsize=$2 --eta=$eta --beta=$beta --featurestructures=levenshtein --alpha=$alpha &
+			done
+			wait
 		done
-		wait
 	done
 }
 
