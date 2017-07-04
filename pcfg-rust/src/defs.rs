@@ -164,7 +164,7 @@ pub struct PCFGParsingStatistics {
     pub uniform_oov_prob: f64,
     pub feature_structures: String,
     pub testtagsfile: String,
-    pub nbesttags: bool,
+    pub nbesttags: String,
     pub dualmono_pad: bool,
     pub logcompvalues: bool,
     pub keepafterdash: bool,
@@ -174,6 +174,7 @@ pub struct PCFGParsingStatistics {
     pub kappa: usize,
     pub omega: f64,
     pub tau: f64,
+    pub mu: f64,
     // Raw numbers
     pub unbin_nts: usize,
     pub bin_nts: usize,
@@ -194,7 +195,7 @@ pub struct PCFGParsingStatistics {
 impl PCFGParsingStatistics {
     pub fn print(&self, head: bool) {
         if head {
-            println!("language\ttrainsize\tunbin_nts\tbin_nts\toov_handling\tuniform_oov_prob\tfeature_structures\ttesttagsfile\tnbesttags\tdualmono_pad\tlogcompvalues\tkeepafterdash\teta\talpha\tbeta\tkappa\tomega\ttau\tall_terms_fallback\tonly_oovs_soft\texhaustive\tgram_ext_bin\tcky_prep\tcky_terms\tcky_higher\toov_words\toov_sents\tparsefails\tfmeasure\tfmeasure (fail ok)\ttagaccuracy");
+            println!("language\ttrainsize\tunbin_nts\tbin_nts\toov_handling\tuniform_oov_prob\tfeature_structures\ttesttagsfile\tnbesttags\tdualmono_pad\tlogcompvalues\tkeepafterdash\teta\talpha\tbeta\tkappa\tomega\ttau\tmu\tall_terms_fallback\tonly_oovs_soft\texhaustive\tgram_ext_bin\tcky_prep\tcky_terms\tcky_higher\toov_words\toov_sents\tparsefails\tfmeasure\tfmeasure (fail ok)\ttagaccuracy");
         }
         print!("{}\t", self.language);
         print!("{}\t", self.trainsize);
@@ -204,7 +205,7 @@ impl PCFGParsingStatistics {
         print!("{}\t", self.uniform_oov_prob);
         print!("{}\t", self.feature_structures);
         print!("{}\t", self.testtagsfile);
-        print!("{}\t", if self.nbesttags {"nbesttags"} else {"1besttags"});
+        print!("{}\t", self.nbesttags);
         print!("{}\t", if self.dualmono_pad {"dualmonopad"} else {"fullpad"});
         print!("{}\t", if self.logcompvalues {"logcompvalues"} else {"nocompvallog"});
         print!("{}\t", if self.keepafterdash {"keepafterdash"} else {"noafterdash"});
@@ -214,6 +215,7 @@ impl PCFGParsingStatistics {
         print!("{}\t", self.kappa);
         print!("{}\t", self.omega);
         print!("{}\t", self.tau);
+        print!("{}\t", self.mu);
         print!("{}\t", if self.all_terms_fallback {"all_terms_fallback"} else {"no_fallback"});
         print!("{}\t", if self.only_oovs_soft {"onlyoovssoft"} else {"allsoft"});
         print!("{}\t", if self.exhaustive {"exhaustive"} else {"stop_on_first_goal"});

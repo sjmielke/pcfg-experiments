@@ -199,7 +199,7 @@ fn main() {
         oov_handling: OOVHandling::MarginalLe3,
         feature_structures: "exactmatch".to_string(),
         testtagsfile: "".to_string(),
-        nbesttags: false,
+        nbesttags: "1besttags".to_string(),
         dualmono_pad: false,
         logcompvalues: false,
         keepafterdash: false,
@@ -209,6 +209,7 @@ fn main() {
         kappa: 3,
         omega: 0.5,
         tau: 0.8,
+        mu: 0.9,
         all_terms_fallback: false,
         only_oovs_soft: false,
         exhaustive: false,
@@ -237,8 +238,8 @@ fn main() {
             .add_option(&["--testtagsfile"], Store,
             "POS tags of the test tag file, if parsing with --featurestructures=postagsonly");
         ap.refer(&mut stats.nbesttags)
-            .add_option(&["--nbesttags"], StoreTrue,
-            "Parse with all possible tags and their weights instead of just the argmax tag (n/a for gold, duh)");
+            .add_option(&["--nbesttags"], Store,
+            "Parse with 1) the argmax tag (1besttags, default) 2) all possible tags and their tagger weights (nbesttags) (n/a for gold, duh) or 3) the argmax tag with weight mu and all others with weight (1-mu)/(|N|-1) (faux-nbesttags)");
         ap.refer(&mut stats.keepafterdash)
             .add_option(&["--keepafterdash"], StoreTrue,
             "Keep everything after a - from SPMRL NTs (e.g., NP-SBJ instead of NP)");
@@ -260,6 +261,9 @@ fn main() {
         ap.refer(&mut stats.tau)
             .add_option(&["--tau"], Store,
             "Hyperparameter tau (default: 0.8)");
+        ap.refer(&mut stats.mu)
+            .add_option(&["--mu"], Store,
+            "Hyperparameter mu (default: 0.9)");
         ap.refer(&mut stats.dualmono_pad)
             .add_option(&["--dualmono-pad"], StoreTrue,
             "grams = window(###word) ∪ window(word###) - instead of the standard grams = window(###word###)");

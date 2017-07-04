@@ -69,7 +69,9 @@ pub struct POSTagEmbedder {
     e2id: HashMap<(POSTag, BTreeMap<POSTag, LogProb>), usize>,
     
     bin_ntdict: HashMap<NT, String>,
-    nbesttags: bool
+    faux_nbesttags: bool,
+    nbesttags: bool,
+    mu: f64
 }
 impl IsEmbedding for POSTagEmbedder {
     fn get_e_id_to_rules(&self) -> &Vec<(usize, Vec<(String, NT, f64)>)> {&self.e_id_to_rules}
@@ -79,6 +81,8 @@ impl IsEmbedding for POSTagEmbedder {
         if self.nbesttags {
             let &LogProb(lp) = self.id2e[esent].1.get(&self.id2e[erule].0).unwrap_or(&LogProb(::std::f64::NEG_INFINITY));
             lp.exp()
+        } else if self.faux_nbesttags {
+            if self.id2e[erule].0 == self.id2e[esent].0 {self.mu} else {(1.0 - self.mu) / ((self.e_id_to_rules.len() - 1) as f64)}
         } else {
             if self.id2e[erule].0 == self.id2e[esent].0 {1.0} else {0.0}
         }
@@ -361,7 +365,8 @@ pub fn embed_rules(
             TerminalMatcher::ExactMatcher(embdr)
         },
         "postagsonly" => {
-            let mut embdr = POSTagEmbedder { e_id_to_rules: Vec::new(), e2id: HashMap::new(), id2e: Vec::new(), bin_ntdict: bin_ntdict.clone(), nbesttags: stats.nbesttags };
+            assert!(stats.nbesttags == "nbesttags" || stats.nbesttags == "faux-nbesttags" || stats.nbesttags == "1besttags");
+            let mut embdr = POSTagEmbedder { e_id_to_rules: Vec::new(), e2id: HashMap::new(), id2e: Vec::new(), bin_ntdict: bin_ntdict.clone(), nbesttags: stats.nbesttags == "nbesttags", faux_nbesttags: stats.nbesttags == "faux-nbesttags", mu: stats.mu };
             embdr.build_e_to_rules(word_to_preterminal);
             TerminalMatcher::POSTagMatcher(embdr)
         },
