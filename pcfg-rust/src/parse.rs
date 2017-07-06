@@ -265,6 +265,10 @@ pub fn agenda_cky_parse<'a>(
             
             let is_oov = word_to_preterminal.get(*wsent) == None;
             
+            // if is_oov{
+            //     println!("OOV-WITH:{:?}", wsent_pos_desc);
+            // }
+            
             if !stats.only_oovs_soft || is_oov {
                 match terminal_matcher {
                     TerminalMatcher::ExactMatcher(ref mut embdr) => {
