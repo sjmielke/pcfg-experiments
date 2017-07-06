@@ -16,6 +16,8 @@ scale = 0.9
 
 logroot = "/home/sjm/documents/Uni/FuzzySP/pcfg-experiments/logs/"
 
+# Data readin
+
 def join_file_frames(filenames, indices):
     df = pd.DataFrame()
     for filename in filenames:
@@ -23,12 +25,42 @@ def join_file_frames(filenames, indices):
 
     return df #.sort_index(axis=0, level=indices, sort_remaining=False)
 
+# Helper functions
+
 def assert_singleton(nda):
     if nda.size > 1:
         print(f"Aggregating ", nda)
         return np.mean(nda)
     else:
         return nda
+
+def restricter_and(df, **kvargs):
+    for k, v in kvargs.items():
+        df = df[df[k] == v]
+    return df
+
+def restricter_lambdas(df, **kvargs):
+    for k, v in kvargs.items():
+        df = df[df[k].apply(v)]
+    return df
+
+def simplify_postags_file(s):
+    if '.' not in s[0]:
+        assert(s[1] == "1besttags")
+        return "gold tags" if s[0] == "" else s[0]
+    l = s[0].split(".")
+    mode = l[-1]
+    sts = l[-2]
+    if mode == "gold":
+        return "gold tags"
+    elif sts == "39000":
+        return "all (39000), " + s[1][0] + "-best"
+    elif sts == "40472":
+        return "all (40472), " + s[1][0] + "-best"
+    else:
+        return "trainsize" + ", " + s[1][0] + "-best"
+
+# My matplotlib-"wrapper"
 
 def multi_facet_plot(
     feature_structure,
@@ -162,265 +194,268 @@ def multi_facet_plot(
 
     return fig
 
+# Plotting code
 
+def plot_max_on_dev():
+    # MAX ON DEV
 
-def restricter_and(df, **kvargs):
-    for k, v in kvargs.items():
-        df = df[df[k] == v]
-    return df
+    def spacename(l):
+        [fs,nb,oh] = l
+        if l[0] == "postagsonly":
+            return f"self-trained {l[1][:5]} POS" 
+        elif l[0] == "exactmatch":
+            return f"hard ({l[2]})"
+        else:
+            return l[0]
 
-def restricter_lambdas(df, **kvargs):
-    for k, v in kvargs.items():
-        df = df[df[k].apply(v)]
-    return df
+    multi_facet_plot(None,
+        # Add levenshtien portion back in from [logroot + "/german_megatune.log", logroot + "/german_apocalypsetune_coarse.log"]
+        filenames = [logroot + "/german_06-27_baselines.log", logroot + "/german_06-23_prefixsuffix_eta06_beta10_tau05.log", logroot + "/german_06-21_prefixsuffix_alpha02_omega05.log", logroot + "/german_06-10_lcs_alphatune.log", logroot + "/german_06-10_ngrams_omnitune.log", logroot + "/german_06-11_ngrams_eta0001.log", logroot + "/german_06-20_ngrams_etabetakappa_kappa4_le500.log", logroot + "/german_06-20_ngrams_etabetakappa_kappa4_gt500.log", logroot + "/german_06-23_prefixsuffix_eta06_beta10_tau05.log", logroot + "/german_06-21_prefixsuffix_alpha02_omega05.log", logroot + "/german_06-24_varitags_1best.log", logroot + "/german_06-24_varitags_nbest.log", logroot + "/german_06-26_varitags_1best_10k.log"],
+        df_restricter = lambda df: restricter_lambdas(df, testtagsfile = lambda f: "gold" not in f and "40472" not in f if isinstance(f, str) else True, trainsize = lambda ts: ts in [100,500,1000,10000], eta = lambda e: e > 0.0),
+        series_names = ['feature_structures', 'nbesttags', 'oov_handling'],
+        columnmapper = spacename,
+        legend_title = "embedding",
+        x_name = 'trainsize',
+        x_title = 'trainsize',
+        facet_name = 'language',
+        facets = ["German","English"],
+        nrows = 1,
+        aggregator = np.max,
+        ywindow_size = 20,
+        ywindow_mid = lambda _b, _t: 60,
+        #legend_right = False
+        ).savefig('/tmp/plots/dev_optimum_per_trainsize.pdf', format='pdf', dpi=dpi)
 
-def simplify_postags_file(s):
-    if '.' not in s[0]:
-        assert(s[1] == "1besttags")
-        return "gold tags" if s[0] == "" else s[0]
-    l = s[0].split(".")
-    mode = l[-1]
-    sts = l[-2]
-    if mode == "gold":
-        return "gold tags"
-    elif sts == "39000":
-        return "all (39000), " + s[1][0] + "-best"
-    elif sts == "40472":
-        return "all (40472), " + s[1][0] + "-best"
-    else:
-        return "trainsize" + ", " + s[1][0] + "-best"
+    multi_facet_plot(None,
+        # Add levenshtien portion back in from [logroot + "/german_megatune.log", logroot + "/german_apocalypsetune_coarse.log"]
+    	filenames = [logroot + "/german_06-27_baselines.log"],
+        #df_restricter = lambda df: restricter_lambdas(df, testtagsfile = lambda f: "gold" not in f and "40472" not in f if isinstance(f, str) else True, trainsize = lambda ts: ts in [100,500,1000,10000], eta = lambda e: e > 0.0),
+        series_names = ['oov_handling'],
+        legend_title = "OOV baseline",
+        x_name = 'trainsize',
+        x_title = 'trainsize',
+        facet_name = 'language',
+        facets = ["German"],
+        nrows = 1,
+        aggregator = assert_singleton,
+        #ywindow_size = 20,
+        #ywindow_mid = lambda _b, _t: 60,
+    	legend_extraspace = 0.2,
+        #legend_right = False
+        ).savefig('/tmp/plots/baseline_comparison.pdf', format='pdf', dpi=dpi)
 
-# MAX ON DEV
+def plot_pos():
+    # We could only ever tune beta on n-best, so let's do it for self-trained and 40472-trained
+    multi_facet_plot('postagsonly',
+        filenames = [logroot + "/german_06-24_varitags_1best.log", logroot + "/german_06-24_varitags_nbest.log", logroot + "/german_06-26_varitags_1best_10k.log"],
+        series_names = ['beta'],
+        legend_title = '$\\beta$',
+        df_restricter = lambda df: restricter_lambdas(df, testtagsfile = lambda x: x[-4:] == 'pred' and "40472" not in x, nbesttags = lambda x: x == 'nbesttags', beta = lambda x: x > 0.1),
+        ).savefig(f"/tmp/plots/varitags_tsself_nbest_monsterplot_eta_beta.pdf", format='pdf', dpi=dpi)
 
-def spacename(l):
-    [fs,nb,oh] = l
-    if l[0] == "postagsonly":
-        return f"self-trained {l[1][:5]} POS" 
-    elif l[0] == "exactmatch":
-        return f"hard ({l[2]})"
-    else:
-        return l[0]
+    multi_facet_plot('postagsonly',
+        filenames = [logroot + "/german_06-24_varitags_1best.log", logroot + "/german_06-24_varitags_nbest.log", logroot + "/german_06-26_varitags_1best_10k.log"],
+        series_names = ['beta'],
+        legend_title = '$\\beta$',
+        df_restricter = lambda df: restricter_lambdas(df, testtagsfile = lambda x: x[-4:] == 'pred' and "40472" in x, nbesttags = lambda x: x == 'nbesttags', beta = lambda x: x > 0.1),
+        ).savefig(f"/tmp/plots/varitags_ts40472_nbest_monsterplot_eta_beta.pdf", format='pdf', dpi=dpi)
 
-multi_facet_plot(None,
-    # Add levenshtien portion back in from [logroot + "/german_megatune.log", logroot + "/german_apocalypsetune_coarse.log"]
-    filenames = [logroot + "/german_06-27_baselines.log", logroot + "/german_06-23_prefixsuffix_eta06_beta10_tau05.log", logroot + "/german_06-21_prefixsuffix_alpha02_omega05.log", logroot + "/german_06-10_lcs_alphatune.log", logroot + "/german_06-10_ngrams_omnitune.log", logroot + "/german_06-11_ngrams_eta0001.log", logroot + "/german_06-20_ngrams_etabetakappa_kappa4_le500.log", logroot + "/german_06-20_ngrams_etabetakappa_kappa4_gt500.log", logroot + "/german_06-23_prefixsuffix_eta06_beta10_tau05.log", logroot + "/german_06-21_prefixsuffix_alpha02_omega05.log", logroot + "/german_06-24_varitags_1best.log", logroot + "/german_06-24_varitags_nbest.log", logroot + "/german_06-26_varitags_1best_10k.log"],
-    df_restricter = lambda df: restricter_lambdas(df, testtagsfile = lambda f: "gold" not in f and "40472" not in f if isinstance(f, str) else True, trainsize = lambda ts: ts in [100,500,1000,10000], eta = lambda e: e > 0.0),
-    series_names = ['feature_structures', 'nbesttags', 'oov_handling'],
-    columnmapper = spacename,
-    legend_title = "embedding",
-    x_name = 'trainsize',
-    x_title = 'trainsize',
-    facet_name = 'language',
-    facets = ["German","English"],
-    nrows = 1,
-    aggregator = np.max,
-    ywindow_size = 20,
-    ywindow_mid = lambda _b, _t: 60,
-    #legend_right = False
-    ).savefig('/tmp/plots/dev_optimum_per_trainsize.pdf', format='pdf', dpi=dpi)
+    multi_facet_plot('postagsonly',
+        filenames = [logroot + "/german_07-04_varitags-faux-nbest.log"],
+        series_names = ['beta'],
+        legend_title = '$\\beta$',
+        df_restricter = lambda df: restricter_lambdas(df, testtagsfile = lambda x: x[-4:] == 'gold', nbesttags = lambda x: x == 'faux-nbesttags'),
+        ).savefig(f"/tmp/plots/varitags_gold_fauxnbest_monsterplot_eta_beta.pdf", format='pdf', dpi=dpi)
 
-multi_facet_plot(None,
-    # Add levenshtien portion back in from [logroot + "/german_megatune.log", logroot + "/german_apocalypsetune_coarse.log"]
-	filenames = [logroot + "/german_06-27_baselines.log"],
-    #df_restricter = lambda df: restricter_lambdas(df, testtagsfile = lambda f: "gold" not in f and "40472" not in f if isinstance(f, str) else True, trainsize = lambda ts: ts in [100,500,1000,10000], eta = lambda e: e > 0.0),
-    series_names = ['oov_handling'],
-    legend_title = "OOV baseline",
-    x_name = 'trainsize',
-    x_title = 'trainsize',
-    facet_name = 'language',
-    facets = ["German"],
-    nrows = 1,
-    aggregator = assert_singleton,
-    #ywindow_size = 20,
-    #ywindow_mid = lambda _b, _t: 60,
-	legend_extraspace = 0.2,
-    #legend_right = False
-    ).savefig('/tmp/plots/baseline_comparison.pdf', format='pdf', dpi=dpi)
+    multi_facet_plot('postagsonly',
+        filenames = [logroot + "/german_06-24_varitags_1best.log", logroot + "/german_06-24_varitags_nbest.log", logroot + "/german_06-26_varitags_1best_10k.log"],
+        series_names = ['testtagsfile','nbesttags'],
+        columnmapper = simplify_postags_file,
+        #aggregator = np.mean, # all tags when ts=all...
+        df_restricter = lambda df: df[(df['nbesttags'] == '1besttags') | (df['beta'] == 1.5)],
+        legend_title = 'tagger trained on',
+        legend_extraspace = 0.05
+        ).savefig('/tmp/plots/varitags_taggers_monsterplot_eta.pdf', format='pdf', dpi=dpi)
 
+def plot_lcs():
+    # LCSRATIO
+    multi_facet_plot('lcsratio',
+        filenames = [],
+        series_names = ['beta'],
+        legend_title = '$\\beta$',
+        ywindow_size = 7,
+        ywindow_mid = lambda bot, top: top - 7
+        ).savefig('/tmp/plots/lcsratio_monsterplot_eta.pdf', format='pdf', dpi=dpi)
 
-# POS TAGS
-# We could only ever tune beta on n-best, so let's do it for self-trained and 40472-trained
+    multi_facet_plot('lcsratio',
+        filenames = [logroot + "/german_06-10_lcs_alphatune.log"],
+        series_names = ['trainsize'],
+        x_name = 'alpha',
+        x_title = '$\\alpha$',
+        facet_name = None,
+        nrows = 1
+        ).savefig('/tmp/plots/lcsratio_alphaplot.pdf', format='pdf', dpi=dpi)
 
-multi_facet_plot('postagsonly',
-    filenames = [logroot + "/german_06-24_varitags_1best.log", logroot + "/german_06-24_varitags_nbest.log", logroot + "/german_06-26_varitags_1best_10k.log"],
-    series_names = ['beta'],
-    legend_title = '$\\beta$',
-    df_restricter = lambda df: restricter_lambdas(df, testtagsfile = lambda x: x[-4:] == 'pred' and "40472" not in x, nbesttags = lambda x: x == 'nbesttags', beta = lambda x: x > 0.1),
-    ).savefig(f"/tmp/plots/varitags_tsself_nbest_monsterplot_eta_beta.pdf", format='pdf', dpi=dpi)
-    
-# multi_facet_plot('postagsonly',
-#     filenames = [logroot + "/german_06-24_varitags_1best.log", logroot + "/german_06-24_varitags_nbest.log", logroot + "/german_06-26_varitags_1best_10k.log"],
-#     series_names = ['beta'],
-#     legend_title = '$\\beta$',
-#     df_restricter = lambda df: restricter_lambdas(df, testtagsfile = lambda x: x[-4:] == 'pred' and "40472" in x, nbesttags = lambda x: x == 'nbesttags', beta = lambda x: x > 0.1),
-#     ).savefig(f"/tmp/plots/varitags_ts40472_nbest_monsterplot_eta_beta.pdf", format='pdf', dpi=dpi)
-# 
-multi_facet_plot('postagsonly',
-    filenames = [logroot + "/german_07-04_varitags-faux-nbest.log"],
-    series_names = ['beta'],
-    legend_title = '$\\beta$',
-    df_restricter = lambda df: restricter_lambdas(df, testtagsfile = lambda x: x[-4:] == 'gold', nbesttags = lambda x: x == 'faux-nbesttags'),
-    ).savefig(f"/tmp/plots/varitags_gold_fauxnbest_monsterplot_eta_beta.pdf", format='pdf', dpi=dpi)
+    multi_facet_plot('lcsratio',
+        filenames = [],
+        series_names = ['trainsize'],
+        x_name = 'beta',
+        x_title = '$\\beta$',
+        facet_name = 'eta',
+        facet_title = "$\\eta$",
+        facets = [0.006, 0.06, 0.6],
+        ywindow_size = 25,
+        ywindow_mid = lambda _b, _t: 60,
+        nrows = 1
+        ).savefig('/tmp/plots/lcsratio_betaplot.pdf', format='pdf', dpi=dpi)
 
-# multi_facet_plot('postagsonly',
-#     filenames = [logroot + "/german_06-24_varitags_1best.log", logroot + "/german_06-24_varitags_nbest.log", logroot + "/german_06-26_varitags_1best_10k.log"],
-#     series_names = ['testtagsfile','nbesttags'],
-#     columnmapper = simplify_postags_file,
-#     #aggregator = np.mean, # all tags when ts=all...
-#     df_restricter = lambda df: df[(df['nbesttags'] == '1besttags') | (df['beta'] == 1.5)],
-#     legend_title = 'tagger trained on',
-#     legend_extraspace = 0.05
-#     ).savefig('/tmp/plots/varitags_taggers_monsterplot_eta.pdf', format='pdf', dpi=dpi)
-# 
-# 
-# # LCSRATIO
-# 
-# multi_facet_plot('lcsratio',
-#     filenames = [],
-#     series_names = ['beta'],
-#     legend_title = '$\\beta$',
-#     ywindow_size = 7,
-#     ywindow_mid = lambda bot, top: top - 7
-#     ).savefig('/tmp/plots/lcsratio_monsterplot_eta.pdf', format='pdf', dpi=dpi)
-# 
-# multi_facet_plot('lcsratio',
-#     filenames = [logroot + "/german_06-10_lcs_alphatune.log"],
-#     series_names = ['trainsize'],
-#     x_name = 'alpha',
-#     x_title = '$\\alpha$',
-#     facet_name = None,
-#     nrows = 1
-#     ).savefig('/tmp/plots/lcsratio_alphaplot.pdf', format='pdf', dpi=dpi)
-# 
-# multi_facet_plot('lcsratio',
-#     filenames = [],
-#     series_names = ['trainsize'],
-#     x_name = 'beta',
-#     x_title = '$\\beta$',
-#     facet_name = 'eta',
-#     facet_title = "$\\eta$",
-#     facets = [0.006, 0.06, 0.6],
-#     ywindow_size = 25,
-#     ywindow_mid = lambda _b, _t: 60,
-#     nrows = 1
-#     ).savefig('/tmp/plots/lcsratio_betaplot.pdf', format='pdf', dpi=dpi)
-# 
-# # PREFIXSUFFIX
-# 
-# multi_facet_plot('prefixsuffix',
-#     filenames = [logroot + "/german_06-21_prefixsuffix_alpha02_omega05.log"],
-#     series_names = ['beta', 'tau'],
-#     columnmapper = lambda t: f"({t[0]}, {t[1]})",
-#     legend_title = '$\\beta \\times \\tau$',
-#     ywindow_size = 7,
-#     ywindow_mid = lambda bot, top: top - 7,
-#     facets = [100, 500, 1000, 10000],
-#     #df_restricter = lambda df: restricter_and(df, tau = 0.5),
-#     nrows = 1
-#     ).savefig('/tmp/plots/prefixsuffix_alpha02_omega05.pdf', format='pdf', dpi=dpi)
-# 
-# multi_facet_plot('prefixsuffix',
-#     filenames = [logroot + "/german_06-23_prefixsuffix_eta06_beta10_tau05.log"],
-#     series_names = ['omega'],
-#     x_name = 'alpha',
-#     x_title = '$\\alpha$',
-#     legend_title = '$\\omega$',
-#     ywindow_size = 7,
-#     ywindow_mid = lambda bot, top: top - 6,
-#     facets = [100, 500, 1000, 10000],
-#     nrows = 1
-#     ).savefig('/tmp/plots/prefixsuffix_eta06_beta10_tau05.pdf', format='pdf', dpi=dpi)
+def plot_cpcs():
+    # PREFIXSUFFIX
+    multi_facet_plot('prefixsuffix',
+        filenames = [logroot + "/german_06-21_prefixsuffix_alpha02_omega05.log"],
+        series_names = ['beta'],
+        legend_title = '$\\beta$',
+        aggregator = np.max,
+        ywindow_size = 7,
+        ywindow_mid = lambda bot, top: top - 7,
+        facets = [100, 500, 1000, 10000],
+        #df_restricter = lambda df: restricter_and(df, tau = 0.5),
+        nrows = 1
+        ).savefig('/tmp/plots/prefixsuffix_beta_best_for_alpha02_omega05.pdf', format='pdf', dpi=dpi)
 
-# LEVENSHTEIN
+    multi_facet_plot('prefixsuffix',
+        filenames = [logroot + "/german_06-21_prefixsuffix_alpha02_omega05.log"],
+        series_names = ['tau'],
+        legend_title = '$\\tau$',
+        aggregator = np.max,
+        facets = [100, 500, 1000, 10000],
+        #df_restricter = lambda df: restricter_and(df, tau = 0.5),
+        nrows = 1
+        ).savefig('/tmp/plots/prefixsuffix_tau_best_for_alpha02_omega05.pdf', format='pdf', dpi=dpi)
 
-multi_facet_plot('levenshtein',
-    filenames = [logroot + "/german_06-27_levenshtein_alphaized.log"],
-    series_names = ['beta'],
-    df_restricter = lambda df: df[df["alpha"] == 1.0],
-    legend_title = '$\\beta$',
-    ywindow_size = 7,
-    ywindow_mid = lambda bot, top: top - 7
-    ).savefig('/tmp/plots/levenshtein_alphaized_monsterplot_eta.pdf', format='pdf', dpi=dpi)
+    multi_facet_plot('prefixsuffix',
+        filenames = [logroot + "/german_06-21_prefixsuffix_alpha02_omega05.log"],
+        series_names = ['beta', 'tau'],
+        columnmapper = lambda t: f"({t[0]}, {t[1]})",
+        legend_title = '$\\beta \\times \\tau$',
+        ywindow_size = 7,
+        ywindow_mid = lambda bot, top: top - 7,
+        facets = [100, 500, 1000, 10000],
+        #df_restricter = lambda df: restricter_and(df, tau = 0.5),
+        nrows = 1
+        ).savefig('/tmp/plots/prefixsuffix_alpha02_omega05.pdf', format='pdf', dpi=dpi)
 
-multi_facet_plot('levenshtein',
-    filenames = [logroot + "/german_06-27_levenshtein_alphaized.log"],
-    series_names = ['trainsize'],
-    df_restricter = lambda df: restricter_and(df, alpha = 1.0),
-    x_name = 'beta',
-    x_title = '$\\beta$',
-    facet_name = 'eta',
-    facet_title = "$\\eta$",
-    facets = [0.006, 0.06, 0.6],
-    ywindow_size = 25,
-    ywindow_mid = lambda _b, _t: 60,
-    nrows = 1
-    ).savefig('/tmp/plots/levenshtein_alphaized_betaplot.pdf', format='pdf', dpi=dpi)
+    multi_facet_plot('prefixsuffix',
+        filenames = [logroot + "/german_06-23_prefixsuffix_eta06_beta10_tau05.log"],
+        series_names = ['omega'],
+        x_name = 'alpha',
+        x_title = '$\\alpha$',
+        legend_title = '$\\omega$',
+        ywindow_size = 7,
+        ywindow_mid = lambda bot, top: top - 6,
+        facets = [100, 500, 1000, 10000],
+        nrows = 1
+        ).savefig('/tmp/plots/prefixsuffix_eta06_beta10_tau05.pdf', format='pdf', dpi=dpi)
 
-multi_facet_plot('levenshtein',
-    filenames = [logroot + "/german_06-27_levenshtein_alphaized.log"],
-    series_names = ['trainsize'],
-    df_restricter = lambda df: restricter_and(df, beta = 10, eta = 0.01),
-    x_name = 'alpha',
-    x_title = '$\\alpha$',
-    facet_name = None,
-    nrows = 1
-    ).savefig('/tmp/plots/levenshtein_alphaized_alphaplot.pdf', format='pdf', dpi=dpi)
+def plot_levenshtein():
+    # LEVENSHTEIN
 
+    multi_facet_plot('levenshtein',
+        filenames = [logroot + "/german_06-27_levenshtein_alphaized.log"],
+        series_names = ['beta'],
+        df_restricter = lambda df: df[df["alpha"] == 1.0],
+        legend_title = '$\\beta$',
+        ywindow_size = 7,
+        ywindow_mid = lambda bot, top: top - 7
+        ).savefig('/tmp/plots/levenshtein_alphaized_monsterplot_eta.pdf', format='pdf', dpi=dpi)
 
-# # LOTS OF NGRAMS STUFF
-# 
-# for (date, scenario) in [(19, "eta006_beta10"), (21, "optimal")]:
-#     multi_facet_plot('ngrams',
-#         filenames = [logroot + f"/german_06-{date}_ngrams_kappatune_{scenario}.log"],
-#         series_names = ['dualmono_pad'],
-#         legend_title = "padding",
-#         df_restricter = lambda df: df[df["kappa"] <= 10],
-#         x_name = 'kappa',
-#         x_title = '$\\kappa$',
-#         facet_name = 'trainsize',
-#         facets = [100, 500, 1000, 10000],
-#         nrows = 1,
-#         legend_right = False,
-#         ywindow_size = 2
-#         ).savefig(f"/tmp/plots/ngrams_kappatune_{scenario}.pdf", format='pdf', dpi=dpi)
-# 
-# for paddingmode in ['fullpad', 'dualmonopad']:
-#     multi_facet_plot('ngrams',
-#         filenames = [logroot + "/german_06-10_ngrams_omnitune.log", logroot + "/german_06-11_ngrams_eta0001.log", logroot + "/german_06-20_ngrams_etabetakappa_kappa4_le500.log", logroot + "/german_06-20_ngrams_etabetakappa_kappa4_gt500.log"],
-#         series_names = ['kappa','beta'],
-#         df_restricter = lambda df: restricter_and(df, dualmono_pad = paddingmode),
-#         columnmapper = lambda t: f"$\\kappa={t[0]}, \\beta={t[1]}$",
-#         legend_title = f"$\\kappa \\times \\beta$ ({paddingmode})",
-#         legend_ncols = 5,
-#         ywindow_size = 7,
-#         ywindow_mid = lambda bot, top: top - 7
-#         ).savefig(f"/tmp/plots/ngrams_{paddingmode}_omni_monsterplot_eta.pdf", format='pdf', dpi=dpi)
-# 
-#     for kappa in [1, 2, 3, 4, 5, 10]:
-#         multi_facet_plot('ngrams',
-#             filenames = [logroot + "/german_06-10_ngrams_omnitune.log", logroot + "/german_06-11_ngrams_eta0001.log", logroot + "/german_06-20_ngrams_etabetakappa_kappa4_le500.log", logroot + "/german_06-20_ngrams_etabetakappa_kappa4_gt500.log"],
-#             series_names = ['beta'],
-#             df_restricter = lambda df: restricter_and(df, dualmono_pad = paddingmode, kappa = kappa),
-#             legend_title = f"$\\beta$ ($\\kappa = {kappa}$)",
-#             ywindow_size = 7,
-#             ywindow_mid = lambda bot, top: top - 7,
-#             facets = [100,500,1000,10000],
-#             nrows = 1
-#             ).savefig(f"/tmp/plots/ngrams_{paddingmode}_kappa{kappa}_monsterplot_eta.pdf", format='pdf', dpi=dpi)
-# 
-# # ALL 40472
-# 
-# multi_facet_plot(None,
-#     filenames = [logroot + "/german_megatune.log", logroot + "/german_apocalypsetune_coarse.log", logroot + "/german_06-23_prefixsuffix_eta06_beta10_tau05.log", logroot + "/german_06-21_prefixsuffix_alpha02_omega05.log", logroot + "/german_06-10_lcs_alphatune.log"],
-#     series_names = ['beta'],
-#     df_restricter = lambda df: restricter_and(df, trainsize = 40472, alpha = 0.2, omega = 0.5),
-#     x_name = 'eta',
-#     x_title = '$\\eta$',
-#     facet_name = 'feature_structures',
-#     facet_title = "embedding",
-#     facets = ["postagsonly", "lcsratio", "prefixsuffix", "levenshtein"],
-#     nrows = 1,
-#     ywindow_size = 5,
-#     ywindow_mid = lambda _b, _t: 75,
-#     legend_right = False
-#     ).savefig('/tmp/plots/levenshtein_betaplot.pdf', format='pdf', dpi=dpi)
+    multi_facet_plot('levenshtein',
+        filenames = [logroot + "/german_06-27_levenshtein_alphaized.log"],
+        series_names = ['trainsize'],
+        df_restricter = lambda df: restricter_and(df, alpha = 1.0),
+        x_name = 'beta',
+        x_title = '$\\beta$',
+        facet_name = 'eta',
+        facet_title = "$\\eta$",
+        facets = [0.006, 0.06, 0.6],
+        ywindow_size = 25,
+        ywindow_mid = lambda _b, _t: 60,
+        nrows = 1
+        ).savefig('/tmp/plots/levenshtein_alphaized_betaplot.pdf', format='pdf', dpi=dpi)
+
+    multi_facet_plot('levenshtein',
+        filenames = [logroot + "/german_06-27_levenshtein_alphaized.log"],
+        series_names = ['trainsize'],
+        df_restricter = lambda df: restricter_and(df, beta = 10, eta = 0.01),
+        x_name = 'alpha',
+        x_title = '$\\alpha$',
+        facet_name = None,
+        nrows = 1
+        ).savefig('/tmp/plots/levenshtein_alphaized_alphaplot.pdf', format='pdf', dpi=dpi)
+
+def plot_ngrams():
+    # LOTS OF NGRAMS STUFF
+    for (date, scenario) in [(19, "eta006_beta10"), (21, "optimal")]:
+        multi_facet_plot('ngrams',
+            filenames = [logroot + f"/german_06-{date}_ngrams_kappatune_{scenario}.log"],
+            series_names = ['dualmono_pad'],
+            legend_title = "padding",
+            df_restricter = lambda df: df[df["kappa"] <= 10],
+            x_name = 'kappa',
+            x_title = '$\\kappa$',
+            facet_name = 'trainsize',
+            facets = [100, 500, 1000, 10000],
+            nrows = 1,
+            legend_right = False,
+            ywindow_size = 2
+            ).savefig(f"/tmp/plots/ngrams_kappatune_{scenario}.pdf", format='pdf', dpi=dpi)
+
+    for paddingmode in ['fullpad', 'dualmonopad']:
+        multi_facet_plot('ngrams',
+            filenames = [logroot + "/german_06-10_ngrams_omnitune.log", logroot + "/german_06-11_ngrams_eta0001.log", logroot + "/german_06-20_ngrams_etabetakappa_kappa4_le500.log", logroot + "/german_06-20_ngrams_etabetakappa_kappa4_gt500.log"],
+            series_names = ['kappa','beta'],
+            df_restricter = lambda df: restricter_and(df, dualmono_pad = paddingmode),
+            columnmapper = lambda t: f"$\\kappa={t[0]}, \\beta={t[1]}$",
+            legend_title = f"$\\kappa \\times \\beta$ ({paddingmode})",
+            legend_ncols = 5,
+            ywindow_size = 7,
+            ywindow_mid = lambda bot, top: top - 7
+            ).savefig(f"/tmp/plots/ngrams_{paddingmode}_omni_monsterplot_eta.pdf", format='pdf', dpi=dpi)
+
+        for kappa in [1, 2, 3, 4, 5, 10]:
+            multi_facet_plot('ngrams',
+                filenames = [logroot + "/german_06-10_ngrams_omnitune.log", logroot + "/german_06-11_ngrams_eta0001.log", logroot + "/german_06-20_ngrams_etabetakappa_kappa4_le500.log", logroot + "/german_06-20_ngrams_etabetakappa_kappa4_gt500.log"],
+                series_names = ['beta'],
+                df_restricter = lambda df: restricter_and(df, dualmono_pad = paddingmode, kappa = kappa),
+                legend_title = f"$\\beta$ ($\\kappa = {kappa}$)",
+                ywindow_size = 7,
+                ywindow_mid = lambda bot, top: top - 7,
+                facets = [100,500,1000,10000],
+                nrows = 1
+                ).savefig(f"/tmp/plots/ngrams_{paddingmode}_kappa{kappa}_monsterplot_eta.pdf", format='pdf', dpi=dpi)
+
+def plot_all_40472():
+    multi_facet_plot(None,
+        filenames = [logroot + "/german_megatune.log", logroot + "/german_apocalypsetune_coarse.log", logroot + "/german_06-23_prefixsuffix_eta06_beta10_tau05.log", logroot + "/german_06-21_prefixsuffix_alpha02_omega05.log", logroot + "/german_06-10_lcs_alphatune.log"],
+        series_names = ['beta'],
+        df_restricter = lambda df: restricter_and(df, trainsize = 40472, alpha = 0.2, omega = 0.5),
+        x_name = 'eta',
+        x_title = '$\\eta$',
+        facet_name = 'feature_structures',
+        facet_title = "embedding",
+        facets = ["postagsonly", "lcsratio", "prefixsuffix", "levenshtein"],
+        nrows = 1,
+        ywindow_size = 5,
+        ywindow_mid = lambda _b, _t: 75,
+        legend_right = False
+        ).savefig('/tmp/plots/levenshtein_betaplot.pdf', format='pdf', dpi=dpi)
+
+# Calling!
+
+#plot_pos()
+#plot_max_on_dev()
+plot_lcs()
+#plot_cpcs()
+#plot_levenshtein()
+#plot_ngrams()
+#plot_all_40472()
