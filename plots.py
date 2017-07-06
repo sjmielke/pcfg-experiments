@@ -280,7 +280,7 @@ def plot_pos():
 def plot_lcs():
     # LCSRATIO
     multi_facet_plot('lcsratio',
-        filenames = [],
+        filenames = [logroot + "/german_07-06_lcsratio_etabeta_for_alpha02.log"],
         series_names = ['beta'],
         legend_title = '$\\beta$',
         ywindow_size = 7,
@@ -297,7 +297,7 @@ def plot_lcs():
         ).savefig('/tmp/plots/lcsratio_alphaplot.pdf', format='pdf', dpi=dpi)
 
     multi_facet_plot('lcsratio',
-        filenames = [],
+        filenames = [logroot + "/german_07-06_lcsratio_etabeta_for_alpha02.log"],
         series_names = ['trainsize'],
         x_name = 'beta',
         x_title = '$\\beta$',
@@ -359,6 +359,28 @@ def plot_cpcs():
 
 def plot_levenshtein():
     # LEVENSHTEIN
+
+    multi_facet_plot('levenshtein',
+        filenames = [logroot + "/german_megatune.log"],
+        series_names = ['beta'],
+        legend_title = '$\\beta$',
+        ywindow_size = 7,
+        ywindow_mid = lambda bot, top: top - 7
+        ).savefig('/tmp/plots/levenshtein_monsterplot_eta.pdf', format='pdf', dpi=dpi)
+
+    multi_facet_plot('levenshtein',
+        filenames = [logroot + "/german_megatune.log"],
+        series_names = ['trainsize'],
+        x_name = 'beta',
+        x_title = '$\\beta$',
+        facet_name = 'eta',
+        facet_title = "$\\eta$",
+        facets = [0.006, 0.06, 0.6],
+        ywindow_size = 25,
+        ywindow_mid = lambda _b, _t: 60,
+        nrows = 1
+        ).savefig('/tmp/plots/levenshtein_betaplot.pdf', format='pdf', dpi=dpi)
+
 
     multi_facet_plot('levenshtein',
         filenames = [logroot + "/german_06-27_levenshtein_alphaized.log"],
@@ -454,8 +476,8 @@ def plot_all_40472():
 
 #plot_pos()
 #plot_max_on_dev()
-plot_lcs()
+#plot_lcs()
 #plot_cpcs()
-#plot_levenshtein()
+plot_levenshtein()
 #plot_ngrams()
 #plot_all_40472()
