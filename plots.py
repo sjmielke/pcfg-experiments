@@ -264,8 +264,22 @@ def plot_pos():
         filenames = [logroot + "/german_07-04_varitags-faux-nbest.log"],
         series_names = ['beta'],
         legend_title = '$\\beta$',
-        df_restricter = lambda df: restricter_lambdas(df, testtagsfile = lambda x: x[-4:] == 'gold', nbesttags = lambda x: x == 'faux-nbesttags'),
+        df_restricter = lambda df: restricter_lambdas(df, testtagsfile = lambda x: x[-4:] == 'gold', nbesttags = lambda x: x == 'faux-nbesttags', beta = lambda x: x > 0.1),
         ).savefig(f"/tmp/plots/varitags_gold_fauxnbest_monsterplot_eta_beta.pdf", format='pdf', dpi=dpi)
+
+    # multi_facet_plot('postagsonly',
+    #     filenames = [logroot + "/german_07-04_varitags-faux-nbest.log"],
+    #     series_names = ['beta'],
+    #     legend_title = '$\\beta$',
+    #     df_restricter = lambda df: restricter_lambdas(df, testtagsfile = lambda x: x[-4:] == 'pred' and x[-10:-5] != '40472', nbesttags = lambda x: x == 'faux-nbesttags', beta = lambda x: x > 0.1),
+    #     ).savefig(f"/tmp/plots/varitags_pred_small_fauxnbest_monsterplot_eta_beta.pdf", format='pdf', dpi=dpi)
+
+    multi_facet_plot('postagsonly',
+        filenames = [logroot + "/german_07-04_varitags-faux-nbest.log"],
+        series_names = ['beta'],
+        legend_title = '$\\beta$',
+        df_restricter = lambda df: restricter_lambdas(df, testtagsfile = lambda x: x[-4:] == 'pred' and x[-10:-5] == '40472', nbesttags = lambda x: x == 'faux-nbesttags', beta = lambda x: x > 0.1),
+        ).savefig(f"/tmp/plots/varitags_pred_full_fauxnbest_monsterplot_eta_beta.pdf", format='pdf', dpi=dpi)
 
     multi_facet_plot('postagsonly',
         filenames = [logroot + "/german_06-24_varitags_1best.log", logroot + "/german_06-24_varitags_nbest.log", logroot + "/german_06-26_varitags_1best_10k.log"],
@@ -474,10 +488,10 @@ def plot_all_40472():
 
 # Calling!
 
-#plot_pos()
+plot_pos()
 #plot_max_on_dev()
 #plot_lcs()
 #plot_cpcs()
-plot_levenshtein()
+#plot_levenshtein()
 #plot_ngrams()
 #plot_all_40472()
