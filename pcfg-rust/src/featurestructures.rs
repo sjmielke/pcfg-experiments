@@ -9,7 +9,9 @@ pub enum TerminalMatcher {
     LCSMatcher (LCSEmbedder),
     PrefixSuffixMatcher (PrefixSuffixEmbedder),
     LevenshteinMatcher(LevenshteinEmbedder),
-    NGramMatcher (NGramEmbedder)
+    NGramMatcher (NGramEmbedder),
+    ContinuousFrequencyMatcher (ContinuousFrequencyEmbedder),
+    JointMatcher(JointEmbedder)
 }
 
 fn get_id<T: Clone + Eq + ::std::hash::Hash>(w: &T, id2e: &mut Vec<T>, e2id: &mut HashMap<T, usize>) -> usize {
@@ -352,9 +354,99 @@ impl IsEmbedding for NGramEmbedder {
     }
 }
 
+pub struct ContinuousFrequencyEmbedder {
+    e_id_to_rules: Vec<(usize, Vec<(String, NT, f64)>)>,
+    id2e: Vec<LogProb>,
+    e2id: HashMap<LogProb, usize>,
+    
+    word2logfreq: HashMap<String, f64>,
+    unklogfreq: f64,
+    norm_factor: f64
+}
+impl IsEmbedding for ContinuousFrequencyEmbedder {
+    fn get_e_id_to_rules(&self) -> &Vec<(usize, Vec<(String, NT, f64)>)> {&self.e_id_to_rules}
+    fn get_e_id_to_rules_mut(&mut self) -> &mut Vec<(usize, Vec<(String, NT, f64)>)> {&mut self.e_id_to_rules}
+    
+    fn comp(&self, erule: usize, esent: usize) -> f64 {
+        let diff: f64 = self.id2e[esent].0 - self.id2e[erule].0;
+        1.0 - (diff * diff) / self.norm_factor
+    }
+    fn embed_rule(&mut self, rule: &(&str, NT, f64)) -> usize {
+        let &(s, _, _) = rule;
+        let e: &f64 =self.word2logfreq.get(s).unwrap_or(&self.unklogfreq);
+        get_id(&LogProb(*e), &mut self.id2e, &mut self.e2id)
+    }
+    fn embed_sent(&mut self, s: &str, _: &Vec<(POSTag, f64)>) -> usize {
+        let e: &f64 = self.word2logfreq.get(s).unwrap_or(&self.unklogfreq);
+        get_id(&LogProb(*e), &mut self.id2e, &mut self.e2id)
+    }
+}
+
+// pub struct DummyEmbedder {
+//     e_id_to_rules: Vec<(usize, Vec<(String, NT, f64)>)>,
+//     id2e: Vec<XXXXXXXXXXX>,
+//     e2id: HashMap<XXXXXXXXXXXX, usize>
+// }
+// impl IsEmbedding for DummyEmbedder {
+//     fn get_e_id_to_rules(&self) -> &Vec<(usize, Vec<(String, NT, f64)>)> {&self.e_id_to_rules}
+//     fn get_e_id_to_rules_mut(&mut self) -> &mut Vec<(usize, Vec<(String, NT, f64)>)> {&mut self.e_id_to_rules}
+//     
+//     fn comp(&self, erule: usize, esent: usize) -> f64 {
+//         self.id2e[esent] == self.id2e[erule]
+//     }
+//     fn embed_rule(&mut self, rule: &(&str, NT, f64)) -> usize {
+//         let &(s, _, _) = rule;
+//         let e = s;
+//         get_id(&e, &mut self.id2e, &mut self.e2id)
+//     }
+//     fn embed_sent(&mut self, s: &str, posdesc: &Vec<(POSTag, f64)>) -> usize {
+//         let e = s;
+//         get_id(&e, &mut self.id2e, &mut self.e2id)
+//     }
+// }
+
+
+pub struct JointEmbedder {
+    e_id_to_rules: Vec<(usize, Vec<(String, NT, f64)>)>,
+    id2e: Vec<Vec<usize>>,
+    e2id: HashMap<Vec<usize>, usize>,
+    
+    embedders: Vec<Box<IsEmbedding>>,
+    betas: Vec<f64>
+}
+impl IsEmbedding for JointEmbedder {
+    fn get_e_id_to_rules(&self) -> &Vec<(usize, Vec<(String, NT, f64)>)> {&self.e_id_to_rules}
+    fn get_e_id_to_rules_mut(&mut self) -> &mut Vec<(usize, Vec<(String, NT, f64)>)> {&mut self.e_id_to_rules}
+    
+    fn comp(&self, erule: usize, esent: usize) -> f64 {
+        let mut comp: f64 = 1.0;
+        let pairs = self.id2e[esent].iter().zip(&self.id2e[erule]);
+        for ((emb, (isent, irule)), beta) in self.embedders.iter().zip(pairs).zip(&self.betas) {
+            comp *= emb.comp(*isent, *irule).powf(*beta)
+        }
+        comp
+    }
+    fn embed_rule(&mut self, rule: &(&str, NT, f64)) -> usize {
+        let mut ids: Vec<usize> = Vec::new();
+        for ref mut emb in &mut self.embedders {
+            ids.push(emb.embed_rule(rule))
+        }
+        get_id(&ids, &mut self.id2e, &mut self.e2id)
+    }
+    fn embed_sent(&mut self, s: &str, posdesc: &Vec<(POSTag, f64)>) -> usize {
+        let mut ids: Vec<usize> = Vec::new();
+        for ref mut emb in &mut self.embedders {
+            ids.push(emb.embed_sent(s, posdesc))
+        }
+        get_id(&ids, &mut self.id2e, &mut self.e2id)
+    }
+}
+
+
 pub fn embed_rules(
     word_to_preterminal: &HashMap<String, Vec<(NT, f64)>>,
     bin_ntdict: &HashMap<NT, String>,
+    wordcounts: (HashMap<String, f64>, f64),
     stats: &PCFGParsingStatistics)
     -> TerminalMatcher {
     
@@ -380,15 +472,34 @@ pub fn embed_rules(
             embdr.build_e_to_rules(word_to_preterminal);
             TerminalMatcher::PrefixSuffixMatcher(embdr)
         },
+        "levenshtein" => {
+            let mut embdr = LevenshteinEmbedder { e_id_to_rules: Vec::new(), e2id: HashMap::new(), id2e: Vec::new(), alpha: stats.alpha };
+            embdr.build_e_to_rules(word_to_preterminal);
+            TerminalMatcher::LevenshteinMatcher(embdr)
+        },
         "ngrams" => {
             let mut embdr = NGramEmbedder { e_id_to_rules: Vec::new(), e2id: HashMap::new(), id2e: Vec::new(), kappa: stats.kappa, dualmono_pad: stats.dualmono_pad, ngram_cache: HashMap::new() };
             embdr.build_e_to_rules(word_to_preterminal);
             TerminalMatcher::NGramMatcher(embdr)
         },
-        "levenshtein" => {
-            let mut embdr = LevenshteinEmbedder { e_id_to_rules: Vec::new(), e2id: HashMap::new(), id2e: Vec::new(), alpha: stats.alpha };
+        "freq-cont" => {
+            let (word2logfreq, logtotal) = wordcounts;
+            let mut embdr = ContinuousFrequencyEmbedder { e_id_to_rules: Vec::new(), e2id: HashMap::new(), id2e: Vec::new(), word2logfreq: word2logfreq, unklogfreq: 0.0, norm_factor: logtotal * logtotal };
             embdr.build_e_to_rules(word_to_preterminal);
-            TerminalMatcher::LevenshteinMatcher(embdr)
+            TerminalMatcher::ContinuousFrequencyMatcher(embdr)
+        },
+        "ngrams+freq" => {
+            let mut ngrams_embdr = NGramEmbedder { e_id_to_rules: Vec::new(), e2id: HashMap::new(), id2e: Vec::new(), kappa: stats.kappa, dualmono_pad: stats.dualmono_pad, ngram_cache: HashMap::new() };
+            ngrams_embdr.build_e_to_rules(word_to_preterminal);
+            
+            let (word2logfreq, logtotal) = wordcounts;
+            let mut freq_embdr = ContinuousFrequencyEmbedder { e_id_to_rules: Vec::new(), e2id: HashMap::new(), id2e: Vec::new(), word2logfreq: word2logfreq, unklogfreq: 0.0, norm_factor: logtotal * logtotal };
+            freq_embdr.build_e_to_rules(word_to_preterminal);
+            
+            let mut embdr = JointEmbedder { e_id_to_rules: Vec::new(), e2id: HashMap::new(), id2e: Vec::new(), embedders: vec![Box::new(ngrams_embdr), Box::new(freq_embdr)], betas: vec![10.0, 80.0] };
+            embdr.build_e_to_rules(word_to_preterminal);
+            
+            TerminalMatcher::JointMatcher(embdr)
         },
         _ => panic!("Incorrect feature structure / matching algorithm {} requested!", stats.feature_structures)
     }

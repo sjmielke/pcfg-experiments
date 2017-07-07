@@ -98,7 +98,7 @@ pub fn binarize_grammar(in_rules: &HashMap<NT, HashMap<RHS, f64>>, ntdict: &Hash
     (bin_rules, reverse_bijection(&rev_ntdict))
 }
 
-pub fn crunch_train_trees(mut train_trees: Vec<PTBTree>, stats: &PCFGParsingStatistics) -> (HashMap<NT, HashMap<RHS, f64>>, HashMap<NT, String>, Vec<NT>, HashMap<NT, f64>, HashMap<NT, f64>) {
+pub fn crunch_train_trees(mut train_trees: Vec<PTBTree>, stats: &PCFGParsingStatistics) -> (HashMap<NT, HashMap<RHS, f64>>, HashMap<NT, String>, Vec<NT>, HashMap<NT, f64>, HashMap<NT, f64>, (HashMap<String, f64>, f64)) {
     
     assert!(train_trees.len() >= stats.trainsize);
     
@@ -207,7 +207,16 @@ pub fn crunch_train_trees(mut train_trees: Vec<PTBTree>, stats: &PCFGParsingStat
         lhs_to_rhs_prob.insert(lhs, innermap);
     }
     
-    (lhs_to_rhs_prob, reverse_bijection(&rev_ntdict), initial_nts.into_iter().collect::<Vec<usize>>(), pret_distr_all, pret_distr_le3)
+    // get to log freqs from `wordcounter` for the frequency based embedding space
+    
+    let mut word2logfreq: HashMap<String, f64> = HashMap::new();
+    let mut wordsum: f64 = 0.0;
+    for (w, c) in word_counter {
+        assert_eq!(word2logfreq.insert(w, (c as f64).ln()), None);
+        wordsum += c as f64
+    }
+    
+    (lhs_to_rhs_prob, reverse_bijection(&rev_ntdict), initial_nts.into_iter().collect::<Vec<usize>>(), pret_distr_all, pret_distr_le3, (word2logfreq, wordsum.ln()))
 }
 
 pub fn crunch_test_trees(read_devtrees: Vec<PTBTree>, stats: &PCFGParsingStatistics) -> (Vec<String>, Vec<String>, Vec<PTBTree>) {
@@ -277,7 +286,7 @@ pub fn read_testtagsfile(filename: &str, golddata: Vec<String>, testmaxlen: Opti
 }
 
 pub fn get_data(wsj_path: &str, spmrl_path: &str, stats: &mut PCFGParsingStatistics)
-        -> ((HashMap<NT, HashMap<RHS, f64>>, HashMap<NT, String>), Vec<NT>, HashMap<NT, f64>, HashMap<NT, f64>, (Vec<String>, Vec<Vec<Vec<(POSTag, f64)>>>, Vec<PTBTree>))  {
+        -> ((HashMap<NT, HashMap<RHS, f64>>, HashMap<NT, String>), Vec<NT>, HashMap<NT, f64>, HashMap<NT, f64>, (HashMap<String, f64>, f64), (Vec<String>, Vec<Vec<Vec<(POSTag, f64)>>>, Vec<PTBTree>))  {
     
     fn read_caseinsensitive(prefix: &String, camellang: &String, stats: &PCFGParsingStatistics, bracketing: bool) -> Result<Vec<PTBTree>, Box<::std::error::Error>> {
         let name1 = prefix.to_string() + &camellang + ".gold.ptb";
@@ -314,7 +323,7 @@ pub fn get_data(wsj_path: &str, spmrl_path: &str, stats: &mut PCFGParsingStatist
         (train, read_bracketinginsensitive(&testfile_prefix, &camellang, stats).expect(&format!("Didn't find {} dev!", lang)))
     };
     
-    let (unb_rules, unb_ntdict, initial_nts, pret_distr_all, pret_distr_le3) = crunch_train_trees(train_trees, &stats);
+    let (unb_rules, unb_ntdict, initial_nts, pret_distr_all, pret_distr_le3, wordcounts) = crunch_train_trees(train_trees, &stats);
     let (mut testsents, gold_testposs, mut testtrees) = crunch_test_trees(test_trees, &stats);
     
     let maxlen = if lang == "ENGLISH" {Some(40)} else {None};
@@ -348,5 +357,5 @@ pub fn get_data(wsj_path: &str, spmrl_path: &str, stats: &mut PCFGParsingStatist
     stats.unbin_nts = unb_ntdict.len();
     stats.bin_nts   = bin_ntdict.len();
     
-    ((bin_rules, bin_ntdict), initial_nts, pret_distr_all, pret_distr_le3, (testsents, testposs, testtrees))
+    ((bin_rules, bin_ntdict), initial_nts, pret_distr_all, pret_distr_le3, wordcounts, (testsents, testposs, testtrees))
 }

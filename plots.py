@@ -51,14 +51,24 @@ def simplify_postags_file(s):
     l = s[0].split(".")
     mode = l[-1]
     sts = l[-2]
+    
+    if s[1][0] == '1':
+        best = '1-best'
+    if s[1][0] == 'n':
+        best = '$n$-best'
+    if s[1][0] == 'f':
+        best = 'faux $n$-best'
+    
     if mode == "gold":
-        return "gold tags"
+        source = "gold tags"
     elif sts == "39000":
-        return "all (39000), " + s[1][0] + "-best"
+        source = "all (39000)"
     elif sts == "40472":
-        return "all (40472), " + s[1][0] + "-best"
+        source = "all (40472)"
     else:
-        return "trainsize" + ", " + s[1][0] + "-best"
+        source = "trainsize"
+    
+    return source + ", " + best
 
 # My matplotlib-"wrapper"
 
@@ -66,6 +76,7 @@ def multi_facet_plot(
     feature_structure,
     filenames,
     series_names,
+	series_sorter = lambda x: x,
     x_name = 'eta',
     x_title = '$\\eta$',
     df_restricter = None,
@@ -139,6 +150,7 @@ def multi_facet_plot(
     # OrderedDict is just an OrderedSet (values = None, are ignored)
     all_series = OrderedDict.fromkeys(all_series)
     all_series = list(all_series)
+    all_series = series_sorter(all_series)
     
     for j in range(nrows):
         for i in range(ncols):
@@ -252,28 +264,28 @@ def plot_pos():
         legend_title = '$\\beta$',
         df_restricter = lambda df: restricter_lambdas(df, testtagsfile = lambda x: x[-4:] == 'pred' and "40472" not in x, nbesttags = lambda x: x == 'nbesttags', beta = lambda x: x > 0.1),
         ).savefig(f"/tmp/plots/varitags_tsself_nbest_monsterplot_eta_beta.pdf", format='pdf', dpi=dpi)
-
+    
     multi_facet_plot('postagsonly',
         filenames = [logroot + "/german_06-24_varitags_1best.log", logroot + "/german_06-24_varitags_nbest.log", logroot + "/german_06-26_varitags_1best_10k.log"],
         series_names = ['beta'],
         legend_title = '$\\beta$',
         df_restricter = lambda df: restricter_lambdas(df, testtagsfile = lambda x: x[-4:] == 'pred' and "40472" in x, nbesttags = lambda x: x == 'nbesttags', beta = lambda x: x > 0.1),
         ).savefig(f"/tmp/plots/varitags_ts40472_nbest_monsterplot_eta_beta.pdf", format='pdf', dpi=dpi)
-
+    
     multi_facet_plot('postagsonly',
         filenames = [logroot + "/german_07-04_varitags-faux-nbest.log"],
         series_names = ['beta'],
         legend_title = '$\\beta$',
         df_restricter = lambda df: restricter_lambdas(df, testtagsfile = lambda x: x[-4:] == 'gold', nbesttags = lambda x: x == 'faux-nbesttags', beta = lambda x: x > 0.1),
         ).savefig(f"/tmp/plots/varitags_gold_fauxnbest_monsterplot_eta_beta.pdf", format='pdf', dpi=dpi)
-
-    # multi_facet_plot('postagsonly',
-    #     filenames = [logroot + "/german_07-04_varitags-faux-nbest.log"],
-    #     series_names = ['beta'],
-    #     legend_title = '$\\beta$',
-    #     df_restricter = lambda df: restricter_lambdas(df, testtagsfile = lambda x: x[-4:] == 'pred' and x[-10:-5] != '40472', nbesttags = lambda x: x == 'faux-nbesttags', beta = lambda x: x > 0.1),
-    #     ).savefig(f"/tmp/plots/varitags_pred_small_fauxnbest_monsterplot_eta_beta.pdf", format='pdf', dpi=dpi)
-
+    
+    multi_facet_plot('postagsonly',
+        filenames = [logroot + "/german_07-04_varitags-faux-nbest.log"],
+        series_names = ['beta'],
+        legend_title = '$\\beta$',
+        df_restricter = lambda df: restricter_lambdas(df, testtagsfile = lambda x: x[-4:] == 'pred' and x[-10:-5] != '40472', nbesttags = lambda x: x == 'faux-nbesttags', beta = lambda x: x > 0.1),
+        ).savefig(f"/tmp/plots/varitags_pred_small_fauxnbest_monsterplot_eta_beta.pdf", format='pdf', dpi=dpi)
+    
     multi_facet_plot('postagsonly',
         filenames = [logroot + "/german_07-04_varitags-faux-nbest.log"],
         series_names = ['beta'],
@@ -282,13 +294,22 @@ def plot_pos():
         ).savefig(f"/tmp/plots/varitags_pred_full_fauxnbest_monsterplot_eta_beta.pdf", format='pdf', dpi=dpi)
 
     multi_facet_plot('postagsonly',
-        filenames = [logroot + "/german_06-24_varitags_1best.log", logroot + "/german_06-24_varitags_nbest.log", logroot + "/german_06-26_varitags_1best_10k.log"],
+        filenames = [logroot + "/german_06-24_varitags_1best.log", logroot + "/german_06-24_varitags_nbest.log", logroot + "/german_06-26_varitags_1best_10k.log", logroot + "/german_07-04_varitags-faux-nbest.log"],
         series_names = ['testtagsfile','nbesttags'],
         columnmapper = simplify_postags_file,
-        #aggregator = np.mean, # all tags when ts=all...
-        df_restricter = lambda df: df[(df['nbesttags'] == '1besttags') | (df['beta'] == 1.5)],
+        aggregator = np.mean, # all tags when ts=all...
+        df_restricter = lambda df: df[((df['nbesttags'] == '1besttags') | ((df['nbesttags'] == 'nbesttags') & (df['beta'] == 1.5))) | ((df['nbesttags'] == 'faux-nbesttags') & (df['beta'] == 1.0))],
+        series_sorter = lambda _: [
+            "gold tags, 1-best",
+            "gold tags, faux $n$-best",
+            "trainsize, 1-best",
+            "trainsize, faux $n$-best",
+            "trainsize, $n$-best",
+            "all (40472), 1-best",
+            "all (40472), faux $n$-best",
+            "all (40472), $n$-best"],
         legend_title = 'tagger trained on',
-        legend_extraspace = 0.05
+        legend_extraspace = 0.07
         ).savefig('/tmp/plots/varitags_taggers_monsterplot_eta.pdf', format='pdf', dpi=dpi)
 
 def plot_lcs():
