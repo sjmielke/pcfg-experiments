@@ -134,11 +134,10 @@ feat-ngrams() {
 
 feat-affixdice() {
 	for segmenter in morfessor bpe; do
-		#for chi in 0.0 0.1 0.2 0.333 0.5 1.0; do
-		for chi in 0.3333333; do
+		for chi in 0.0 0.1 0.2 0.333 0.5 1.0; do
 			for beta in 0.0 0.1 0.5 $BETAVALS 50.0 100.0; do
 				for eta in $ETAVALS; do
-					$PCFGR --language=$1 --trainsize=$2 --eta=$eta --beta=$beta --featurestructures=affixdice --morftagfileprefix=../${segmenter}/SPMRL &
+					$PCFGR --language=$1 --trainsize=$2 --eta=$eta --beta=$beta --featurestructures=affixdice --morftagfileprefix=../${segmenter}/SPMRL --chi=$chi &
 				done
 				wait
 			done
@@ -171,7 +170,7 @@ ngrams-kappatune-optimal() {
 }
 
 tune() {
-	echo $'language\ttrainsize\tunbin_nts\tbin_nts\toov_handling\tuniform_oov_prob\tfeature_structures\ttesttagsfile\tmorftagfileprefix\tnbesttags\tdualmono_pad\tlogcompvalues\tkeepafterdash\teta\talpha\tbeta\tkappa\tomega\ttau\tmu\tall_terms_fallback\tonly_oovs_soft\texhaustive\tgram_ext_bin\tcky_prep\tcky_terms\tcky_higher\toov_words\toov_sents\tparsefails\tfmeasure\tfmeasure (fail ok)\ttagaccuracy'
+	echo $'language\ttrainsize\tunbin_nts\tbin_nts\toov_handling\tuniform_oov_prob\tfeature_structures\ttesttagsfile\tmorftagfileprefix\tnbesttags\tdualmono_pad\tlogcompvalues\tkeepafterdash\teta\talpha\tbeta\tkappa\tomega\ttau\tmu\tchi\tall_terms_fallback\tonly_oovs_soft\texhaustive\tgram_ext_bin\tcky_prep\tcky_terms\tcky_higher\toov_words\toov_sents\tparsefails\tfmeasure\tfmeasure (fail ok)\ttagaccuracy'
 
 	for trainsize in $TRAINSIZES; do
 	# 	run-baselines                  German "$trainsize"

@@ -385,19 +385,25 @@ impl IsEmbedding for ContinuousFrequencyEmbedder {
 
 pub struct AffixDiceEmbedder {
     e_id_to_rules: Vec<(usize, Vec<(String, NT, f64)>)>,
-    id2e: Vec<BTreeSet<(String, Morph)>>,
-    e2id: HashMap<BTreeSet<(String, Morph)>, usize>,
+    id2e: Vec<(BTreeSet<(String, Morph)>, Probability)>,
+    e2id: HashMap<(BTreeSet<(String, Morph)>, Probability), usize>,
     
-    morfdict: HashMap<String, BTreeSet<(String, Morph)>>
+    morfdict: HashMap<String, (BTreeSet<(String, Morph)>, Probability)>,
+    chi: f64
 }
 impl IsEmbedding for AffixDiceEmbedder {
     fn get_e_id_to_rules(&self) -> &Vec<(usize, Vec<(String, NT, f64)>)> {&self.e_id_to_rules}
     fn get_e_id_to_rules_mut(&mut self) -> &mut Vec<(usize, Vec<(String, NT, f64)>)> {&mut self.e_id_to_rules}
     
     fn comp(&self, erule: usize, esent: usize) -> f64 {
-        let inter = self.id2e[esent].intersection(&self.id2e[erule]).count() as f64;
-        let sum = (self.id2e[esent].len() + self.id2e[erule].len()) as f64;
-        2.0 * inter / sum // dice
+        let &(ref set1, Probability(sum1)) = &self.id2e[esent];
+        let &(ref set2, Probability(sum2)) = &self.id2e[erule];
+        
+        let inter_vec: Vec<&(String, Morph)> = set1.intersection(&set2).collect();
+        let mut intersum: f64 = (inter_vec.iter().filter(|&&&(_, ref c)| *c == Morph::STM).count() as f64) * self.chi;
+        intersum             += (inter_vec.iter().filter(|&&&(_, ref c)| *c != Morph::STM).count() as f64) * (1.0-self.chi) / 2.0;
+        
+        2.0 * intersum / (sum1 + sum2) // affixdice
     }
     fn embed_rule(&mut self, rule: &(&str, NT, f64)) -> usize {
         let &(s, _, _) = rule;
@@ -525,7 +531,14 @@ pub fn embed_rules(
                 TerminalMatcher::ContinuousFrequencyMatcher(embdr)
             },
             "affixdice" => {
-                let mut embdr = AffixDiceEmbedder { e_id_to_rules: Vec::new(), e2id: HashMap::new(), id2e: Vec::new(), morfdict: morfdict };
+                let mut morfdict_w_sum: HashMap<String, (BTreeSet<(String, Morph)>, Probability)> = HashMap::new();
+                for (w, set) in morfdict.into_iter() {
+                    let mut weightedsum: f64 = (set.iter().filter(|&&(_, ref c)| *c == Morph::STM).count() as f64) * stats.chi;
+                    weightedsum             += (set.iter().filter(|&&(_, ref c)| *c != Morph::STM).count() as f64) * (1.0-stats.chi) / 2.0;
+                    morfdict_w_sum.insert(w, (set, Probability(weightedsum)));
+                }
+                
+                let mut embdr = AffixDiceEmbedder { e_id_to_rules: Vec::new(), e2id: HashMap::new(), id2e: Vec::new(), morfdict: morfdict_w_sum, chi: stats.chi };
                 embdr.build_e_to_rules(word_to_preterminal);
                 TerminalMatcher::AffixDiceMatcher(embdr)
             }

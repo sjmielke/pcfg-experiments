@@ -315,7 +315,7 @@ def plot_pos():
 def plot_lcs():
     # LCSRATIO
     multi_facet_plot('lcsratio',
-        filenames = [logroot + "/german_07-06_lcsratio_etabeta_for_alpha02.log"],
+        filenames = [logroot + "/german_07-06_lcsratio_etabeta_for_alpha02.log", logroot + "/german_07-06_lcsratio_etabeta_for_alpha02_10k.log"],
         series_names = ['beta'],
         legend_title = '$\\beta$',
         ywindow_size = 7,
@@ -332,7 +332,7 @@ def plot_lcs():
         ).savefig('/tmp/plots/lcsratio_alphaplot.pdf', format='pdf', dpi=dpi)
 
     multi_facet_plot('lcsratio',
-        filenames = [logroot + "/german_07-06_lcsratio_etabeta_for_alpha02.log"],
+        filenames = [logroot + "/german_07-06_lcsratio_etabeta_for_alpha02.log", logroot + "/german_07-06_lcsratio_etabeta_for_alpha02_10k.log"],
         series_names = ['trainsize'],
         x_name = 'beta',
         x_title = '$\\beta$',
@@ -491,6 +491,18 @@ def plot_ngrams():
                 nrows = 1
                 ).savefig(f"/tmp/plots/ngrams_{paddingmode}_kappa{kappa}_monsterplot_eta.pdf", format='pdf', dpi=dpi)
 
+def plot_affixdice():
+    for segmenter in ['morfessor', 'bpe']:
+        multi_facet_plot('affixdice',
+            filenames = ["/tmp/affixdice_unweighted.log"],
+            series_names = ['beta'],
+            legend_title = '$\\beta$',
+            df_restricter = lambda df: df[df["morftagfileprefix"] == f"../{segmenter}/SPMRL"],
+            #ywindow_size = 7,
+            #ywindow_mid = lambda bot, top: top - 7
+            ).savefig(f"/tmp/plots/affixdice_{segmenter}_monsterplot_eta.pdf", format='pdf', dpi=dpi)
+
+
 def plot_all_40472():
     multi_facet_plot(None,
         filenames = [logroot + "/german_megatune.log", logroot + "/german_apocalypsetune_coarse.log", logroot + "/german_06-23_prefixsuffix_eta06_beta10_tau05.log", logroot + "/german_06-21_prefixsuffix_alpha02_omega05.log", logroot + "/german_06-10_lcs_alphatune.log"],
@@ -509,10 +521,11 @@ def plot_all_40472():
 
 # Calling!
 
-plot_pos()
+#plot_pos()
 #plot_max_on_dev()
 #plot_lcs()
 #plot_cpcs()
 #plot_levenshtein()
 #plot_ngrams()
+plot_affixdice()
 #plot_all_40472()

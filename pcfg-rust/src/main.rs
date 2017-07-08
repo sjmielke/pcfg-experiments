@@ -211,6 +211,7 @@ fn main() {
         omega: 0.5,
         tau: 0.8,
         mu: 0.9,
+        chi: 0.33333333,
         all_terms_fallback: false,
         only_oovs_soft: false,
         exhaustive: false,
@@ -268,6 +269,9 @@ fn main() {
         ap.refer(&mut stats.mu)
             .add_option(&["--mu"], Store,
             "Hyperparameter mu (default: 0.9)");
+        ap.refer(&mut stats.chi)
+            .add_option(&["--chi"], Store,
+            "Hyperparameter chi (default: 0.33333333)");
         ap.refer(&mut stats.dualmono_pad)
             .add_option(&["--dualmono-pad"], StoreTrue,
             "grams = window(###word) ∪ window(word###) - instead of the standard grams = window(###word###)");
