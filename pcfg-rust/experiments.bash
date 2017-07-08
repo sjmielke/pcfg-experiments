@@ -1,12 +1,12 @@
 #! /bin/bash
 
-PCFGR="/home/student/mielke/pcfg-experiments/pcfg-rust/target/release/pcfg-rust --wsjpath=/home/student/mielke/ptb3/parsed/mrg/wsj --spmrlpath=/home/student/mielke/SPMRL_SHARED_2014"
-#BPEPATH="/home/student/mielke/pcfg-experiments/sennrich_bpe/"
-BPEPATH="/home/sjm/documents/ISI/subword-nmt/sennrich_bpe/"
+REPOROOT="/home/student/mielke/pcfg-experiments"
+PCFGR="$REPOROOT/pcfg-rust/target/release/pcfg-rust --wsjpath=/home/student/mielke/ptb3/parsed/mrg/wsj --spmrlpath=/home/student/mielke/SPMRL_SHARED_2014"
+BPEPATH="$REPOROOT/subword-nmt/"
 
-#   ETAVALS="0.0 0.001 0.003 0.006 0.01 0.03 0.06 0.1 0.3 0.6 0.95 1.0"
-   ETAVALS="0.0 0.001 0.006 0.01 0.06 0.1 0.6 1.0"
-  BETAVALS="1.0 2.0 5.0 10.0 20.0"
+#ETAVALS="0.0 0.001 0.003 0.006 0.01 0.03 0.06 0.1 0.3 0.6 0.95 1.0"
+ETAVALS="0.0 0.001 0.006 0.01 0.06 0.1 0.6 1.0"
+BETAVALS="1.0 2.0 5.0 10.0 20.0"
 #TRAINSIZES="100 500 1000 5000 10000 40472"
 TRAINSIZES="100 500 1000 10000"
 
@@ -134,10 +134,11 @@ feat-ngrams() {
 
 feat-affixdice() {
 	for segmenter in morfessor bpe; do
-		for chi in 0.0 0.1 0.2 0.333 0.5 1.0; do
-			for beta in 0.1 0.5 $BETAVALS; do
+		#for chi in 0.0 0.1 0.2 0.333 0.5 1.0; do
+		for chi in 0.3333333; do
+			for beta in 0.0 0.1 0.5 $BETAVALS 50.0 100.0; do
 				for eta in $ETAVALS; do
-					$PCFGR --language=$1 --trainsize=$2 --eta=$eta --beta=$beta --featurestructures=affixdice --chi=$chi --morftagfileprefix=../${segmenter}/SPMRL &
+					$PCFGR --language=$1 --trainsize=$2 --eta=$eta --beta=$beta --featurestructures=affixdice --morftagfileprefix=../${segmenter}/SPMRL &
 				done
 				wait
 			done
@@ -309,9 +310,9 @@ berkeley-calls() {
 
 ########################## MAIN ############################
 
-for lang in GERMAN KOREAN FRENCH ARABIC; do
-	#morfize $lang
-	bpeize $lang
-done
+# for lang in GERMAN KOREAN FRENCH ARABIC; do
+# 	morfize $lang
+# 	bpeize $lang
+# done
 
-#tune
+tune
