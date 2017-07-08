@@ -450,57 +450,67 @@ pub fn embed_rules(
     stats: &PCFGParsingStatistics)
     -> TerminalMatcher {
     
-    match &*stats.feature_structures {
-        "exactmatch" => {
-            let mut embdr = ExactEmbedder { e_id_to_rules: Vec::new(), e2id: HashMap::new(), id2e: Vec::new() };
-            embdr.build_e_to_rules(word_to_preterminal);
-            TerminalMatcher::ExactMatcher(embdr)
-        },
-        "postagsonly" => {
-            assert!(stats.nbesttags == "nbesttags" || stats.nbesttags == "faux-nbesttags" || stats.nbesttags == "1besttags");
-            let mut embdr = POSTagEmbedder { e_id_to_rules: Vec::new(), e2id: HashMap::new(), id2e: Vec::new(), bin_ntdict: bin_ntdict.clone(), nbesttags: stats.nbesttags == "nbesttags", faux_nbesttags: stats.nbesttags == "faux-nbesttags", mu: stats.mu };
-            embdr.build_e_to_rules(word_to_preterminal);
-            TerminalMatcher::POSTagMatcher(embdr)
-        },
-        "lcsratio" => {
-            let mut embdr = LCSEmbedder { e_id_to_rules: Vec::new(), e2id: HashMap::new(), id2e: Vec::new(), alpha: stats.alpha };
-            embdr.build_e_to_rules(word_to_preterminal);
-            TerminalMatcher::LCSMatcher(embdr)
-        },
-        "prefixsuffix" => {
-            let mut embdr = PrefixSuffixEmbedder { e_id_to_rules: Vec::new(), e2id: HashMap::new(), id2e: Vec::new(), alpha: stats.alpha, omega: stats.omega, tau: stats.tau };
-            embdr.build_e_to_rules(word_to_preterminal);
-            TerminalMatcher::PrefixSuffixMatcher(embdr)
-        },
-        "levenshtein" => {
-            let mut embdr = LevenshteinEmbedder { e_id_to_rules: Vec::new(), e2id: HashMap::new(), id2e: Vec::new(), alpha: stats.alpha };
-            embdr.build_e_to_rules(word_to_preterminal);
-            TerminalMatcher::LevenshteinMatcher(embdr)
-        },
-        "ngrams" => {
-            let mut embdr = NGramEmbedder { e_id_to_rules: Vec::new(), e2id: HashMap::new(), id2e: Vec::new(), kappa: stats.kappa, dualmono_pad: stats.dualmono_pad, ngram_cache: HashMap::new() };
-            embdr.build_e_to_rules(word_to_preterminal);
-            TerminalMatcher::NGramMatcher(embdr)
-        },
-        "freq-cont" => {
-            let (word2logfreq, logtotal) = wordcounts;
-            let mut embdr = ContinuousFrequencyEmbedder { e_id_to_rules: Vec::new(), e2id: HashMap::new(), id2e: Vec::new(), word2logfreq: word2logfreq, unklogfreq: 0.0, norm_factor: logtotal * logtotal };
-            embdr.build_e_to_rules(word_to_preterminal);
-            TerminalMatcher::ContinuousFrequencyMatcher(embdr)
-        },
-        "ngrams+freq" => {
-            let mut ngrams_embdr = NGramEmbedder { e_id_to_rules: Vec::new(), e2id: HashMap::new(), id2e: Vec::new(), kappa: stats.kappa, dualmono_pad: stats.dualmono_pad, ngram_cache: HashMap::new() };
-            ngrams_embdr.build_e_to_rules(word_to_preterminal);
-            
-            let (word2logfreq, logtotal) = wordcounts;
-            let mut freq_embdr = ContinuousFrequencyEmbedder { e_id_to_rules: Vec::new(), e2id: HashMap::new(), id2e: Vec::new(), word2logfreq: word2logfreq, unklogfreq: 0.0, norm_factor: logtotal * logtotal };
-            freq_embdr.build_e_to_rules(word_to_preterminal);
-            
-            let mut embdr = JointEmbedder { e_id_to_rules: Vec::new(), e2id: HashMap::new(), id2e: Vec::new(), embedders: vec![Box::new(ngrams_embdr), Box::new(freq_embdr)], betas: vec![10.0, 80.0] };
-            embdr.build_e_to_rules(word_to_preterminal);
-            
-            TerminalMatcher::JointMatcher(embdr)
-        },
-        _ => panic!("Incorrect feature structure / matching algorithm {} requested!", stats.feature_structures)
+    fn get_single_embedder(
+        embedding_space: &str,
+        word_to_preterminal: &HashMap<String, Vec<(NT, f64)>>,
+        bin_ntdict: &HashMap<NT, String>,
+        wordcounts: (HashMap<String, f64>, f64),
+        stats: &PCFGParsingStatistics) -> TerminalMatcher {
+        match embedding_space {
+            "exactmatch" => {
+                let mut embdr = ExactEmbedder { e_id_to_rules: Vec::new(), e2id: HashMap::new(), id2e: Vec::new() };
+                embdr.build_e_to_rules(word_to_preterminal);
+                TerminalMatcher::ExactMatcher(embdr)
+            },
+            "postagsonly" => {
+                assert!(stats.nbesttags == "nbesttags" || stats.nbesttags == "faux-nbesttags" || stats.nbesttags == "1besttags");
+                let mut embdr = POSTagEmbedder { e_id_to_rules: Vec::new(), e2id: HashMap::new(), id2e: Vec::new(), bin_ntdict: bin_ntdict.clone(), nbesttags: stats.nbesttags == "nbesttags", faux_nbesttags: stats.nbesttags == "faux-nbesttags", mu: stats.mu };
+                embdr.build_e_to_rules(word_to_preterminal);
+                TerminalMatcher::POSTagMatcher(embdr)
+            },
+            "lcsratio" => {
+                let mut embdr = LCSEmbedder { e_id_to_rules: Vec::new(), e2id: HashMap::new(), id2e: Vec::new(), alpha: stats.alpha };
+                embdr.build_e_to_rules(word_to_preterminal);
+                TerminalMatcher::LCSMatcher(embdr)
+            },
+            "prefixsuffix" => {
+                let mut embdr = PrefixSuffixEmbedder { e_id_to_rules: Vec::new(), e2id: HashMap::new(), id2e: Vec::new(), alpha: stats.alpha, omega: stats.omega, tau: stats.tau };
+                embdr.build_e_to_rules(word_to_preterminal);
+                TerminalMatcher::PrefixSuffixMatcher(embdr)
+            },
+            "levenshtein" => {
+                let mut embdr = LevenshteinEmbedder { e_id_to_rules: Vec::new(), e2id: HashMap::new(), id2e: Vec::new(), alpha: stats.alpha };
+                embdr.build_e_to_rules(word_to_preterminal);
+                TerminalMatcher::LevenshteinMatcher(embdr)
+            },
+            "ngrams" => {
+                let mut embdr = NGramEmbedder { e_id_to_rules: Vec::new(), e2id: HashMap::new(), id2e: Vec::new(), kappa: stats.kappa, dualmono_pad: stats.dualmono_pad, ngram_cache: HashMap::new() };
+                embdr.build_e_to_rules(word_to_preterminal);
+                TerminalMatcher::NGramMatcher(embdr)
+            },
+            "freq-cont" => {
+                let (word2logfreq, logtotal) = wordcounts;
+                let mut embdr = ContinuousFrequencyEmbedder { e_id_to_rules: Vec::new(), e2id: HashMap::new(), id2e: Vec::new(), word2logfreq: word2logfreq, unklogfreq: 0.0, norm_factor: logtotal * logtotal };
+                embdr.build_e_to_rules(word_to_preterminal);
+                TerminalMatcher::ContinuousFrequencyMatcher(embdr)
+            },
+            _ => panic!("Incorrect feature structure / matching algorithm {} requested!", stats.feature_structures)
+        }
+    }
+    
+    if stats.feature_structures.contains('+') {
+        let mut ngrams_embdr = NGramEmbedder { e_id_to_rules: Vec::new(), e2id: HashMap::new(), id2e: Vec::new(), kappa: stats.kappa, dualmono_pad: stats.dualmono_pad, ngram_cache: HashMap::new() };
+        ngrams_embdr.build_e_to_rules(word_to_preterminal);
+        
+        let (word2logfreq, logtotal) = wordcounts;
+        let mut freq_embdr = ContinuousFrequencyEmbedder { e_id_to_rules: Vec::new(), e2id: HashMap::new(), id2e: Vec::new(), word2logfreq: word2logfreq, unklogfreq: 0.0, norm_factor: logtotal * logtotal };
+        freq_embdr.build_e_to_rules(word_to_preterminal);
+        
+        let mut embdr = JointEmbedder { e_id_to_rules: Vec::new(), e2id: HashMap::new(), id2e: Vec::new(), embedders: vec![Box::new(ngrams_embdr), Box::new(freq_embdr)], betas: vec![10.0, 80.0] };
+        embdr.build_e_to_rules(word_to_preterminal);
+        
+        TerminalMatcher::JointMatcher(embdr)
+    } else {
+        get_single_embedder(&stats.feature_structures, word_to_preterminal, bin_ntdict, wordcounts, stats)
     }
 }
