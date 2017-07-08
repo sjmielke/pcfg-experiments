@@ -1,4 +1,4 @@
-use std::collections::{HashMap,HashSet};
+use std::collections::{HashMap,HashSet,BTreeSet};
 use std::fs::File;
 use std::io::prelude::*;
 
@@ -238,6 +238,15 @@ pub fn crunch_test_trees(read_devtrees: Vec<PTBTree>, stats: &PCFGParsingStatist
     (devsents, devposs, devtrees)
 }
 
+fn readfile(filename: &str) -> String {
+    let mut contents = String::new();
+    File::open(filename)
+        .expect(&format!("no file »{}« :(", filename))
+        .read_to_string(&mut contents)
+        .expect(&format!("unreadable file »{}« :(", filename));
+    contents
+}
+
 /// Returns a vector of tag-LOGprob pairs for each word of each sentence.
 /// Assumes space separated tag descriptors:
 /// * 1-best: simply the tag.
@@ -258,12 +267,8 @@ pub fn read_testtagsfile(filename: &str, golddata: Vec<String>, testmaxlen: Opti
     }
     
     if filename != "" {
-        let mut contents = String::new();
-        File::open(filename)
-            .expect("no pos file :(")
-            .read_to_string(&mut contents)
-            .expect("unreadable pos file :(");
-        let poss = contents.split("\n")
+        let poss = readfile(filename)
+            .split("\n")
             .collect::<Vec<&str>>()
             .into_iter()
             .filter(|s| *s != "")
@@ -285,8 +290,43 @@ pub fn read_testtagsfile(filename: &str, golddata: Vec<String>, testmaxlen: Opti
     }
 }
 
+pub fn read_morfdictfile(filename_prefix: &str, uppercase_language: &str) -> HashMap<String, BTreeSet<(String, Morph)>> {
+    let mut morfdict: HashMap<String, BTreeSet<(String, Morph)>> = HashMap::new();
+    
+    if filename_prefix == "" {
+        return HashMap::new()
+    }
+    
+    for (w, fc) in readfile(&format!("{}.{}.vocab.txt", filename_prefix, uppercase_language)).split("\n").zip(readfile(&format!("{}.{}.vocab.flatcatized.txt", filename_prefix, uppercase_language)).split("\n")) {
+        if w == "" && fc == "" {
+            continue
+        }
+        
+        let mut sgms: BTreeSet<(String, Morph)> = BTreeSet::new();
+        let mut done: bool = false;
+        for ss in fc.split(' ') {
+            if done {
+                panic!("Null segment encountered in »{}«!", fc)
+            }
+            if ss != "" {
+                let pair = ss.split('#').collect::<Vec<&str>>();
+                if pair.len() != 2 {
+                    panic!("faulty pair: »{}« and »{}« at segment »{}« ~> »{:?}«", w, fc, ss, pair)
+                }
+                sgms.insert((pair[0].to_string(), ::std::str::FromStr::from_str(pair[1]).unwrap()));
+            } else {
+                done = true
+            }
+        }
+        assert_eq!(morfdict.insert(w.to_string(), sgms), None)
+    }
+    
+    morfdict
+}
+
+
 pub fn get_data(wsj_path: &str, spmrl_path: &str, stats: &mut PCFGParsingStatistics)
-        -> ((HashMap<NT, HashMap<RHS, f64>>, HashMap<NT, String>), Vec<NT>, HashMap<NT, f64>, HashMap<NT, f64>, (HashMap<String, f64>, f64), (Vec<String>, Vec<Vec<Vec<(POSTag, f64)>>>, Vec<PTBTree>))  {
+        -> ((HashMap<NT, HashMap<RHS, f64>>, HashMap<NT, String>), Vec<NT>, HashMap<NT, f64>, HashMap<NT, f64>, (HashMap<String, f64>, f64), HashMap<String, BTreeSet<(String, Morph)>>, (Vec<String>, Vec<Vec<Vec<(POSTag, f64)>>>, Vec<PTBTree>))  {
     
     fn read_caseinsensitive(prefix: &String, camellang: &String, stats: &PCFGParsingStatistics, bracketing: bool) -> Result<Vec<PTBTree>, Box<::std::error::Error>> {
         let name1 = prefix.to_string() + &camellang + ".gold.ptb";
@@ -326,8 +366,11 @@ pub fn get_data(wsj_path: &str, spmrl_path: &str, stats: &mut PCFGParsingStatist
     let (unb_rules, unb_ntdict, initial_nts, pret_distr_all, pret_distr_le3, wordcounts) = crunch_train_trees(train_trees, &stats);
     let (mut testsents, gold_testposs, mut testtrees) = crunch_test_trees(test_trees, &stats);
     
-    let maxlen = if lang == "ENGLISH" {Some(40)} else {None};
+    //let maxlen = if lang == "ENGLISH" {Some(40)} else {None};
+    let maxlen = None;
     let mut testposs = read_testtagsfile(&stats.testtagsfile, gold_testposs, maxlen);
+    
+    let morfdict: HashMap<String, BTreeSet<(String, Morph)>> = read_morfdictfile(&stats.morftagfileprefix, &lang);
     
     if lang == "ENGLISH" {
         testsents.truncate(500);
@@ -357,5 +400,5 @@ pub fn get_data(wsj_path: &str, spmrl_path: &str, stats: &mut PCFGParsingStatist
     stats.unbin_nts = unb_ntdict.len();
     stats.bin_nts   = bin_ntdict.len();
     
-    ((bin_rules, bin_ntdict), initial_nts, pret_distr_all, pret_distr_le3, wordcounts, (testsents, testposs, testtrees))
+    ((bin_rules, bin_ntdict), initial_nts, pret_distr_all, pret_distr_le3, wordcounts, morfdict, (testsents, testposs, testtrees))
 }

@@ -11,6 +11,7 @@ pub enum TerminalMatcher {
     LevenshteinMatcher(LevenshteinEmbedder),
     NGramMatcher (NGramEmbedder),
     ContinuousFrequencyMatcher (ContinuousFrequencyEmbedder),
+    AffixDiceMatcher (AffixDiceEmbedder),
     JointMatcher(JointEmbedder)
 }
 
@@ -382,10 +383,37 @@ impl IsEmbedding for ContinuousFrequencyEmbedder {
     }
 }
 
+pub struct AffixDiceEmbedder {
+    e_id_to_rules: Vec<(usize, Vec<(String, NT, f64)>)>,
+    id2e: Vec<BTreeSet<(String, Morph)>>,
+    e2id: HashMap<BTreeSet<(String, Morph)>, usize>,
+    
+    morfdict: HashMap<String, BTreeSet<(String, Morph)>>
+}
+impl IsEmbedding for AffixDiceEmbedder {
+    fn get_e_id_to_rules(&self) -> &Vec<(usize, Vec<(String, NT, f64)>)> {&self.e_id_to_rules}
+    fn get_e_id_to_rules_mut(&mut self) -> &mut Vec<(usize, Vec<(String, NT, f64)>)> {&mut self.e_id_to_rules}
+    
+    fn comp(&self, erule: usize, esent: usize) -> f64 {
+        let inter = self.id2e[esent].intersection(&self.id2e[erule]).count() as f64;
+        let sum = (self.id2e[esent].len() + self.id2e[erule].len()) as f64;
+        2.0 * inter / sum // dice
+    }
+    fn embed_rule(&mut self, rule: &(&str, NT, f64)) -> usize {
+        let &(s, _, _) = rule;
+        let e = &self.morfdict[s];
+        get_id(e, &mut self.id2e, &mut self.e2id)
+    }
+    fn embed_sent(&mut self, s: &str, _: &Vec<(POSTag, f64)>) -> usize {
+        let e = &self.morfdict[s];
+        get_id(e, &mut self.id2e, &mut self.e2id)
+    }
+}
+
 // pub struct DummyEmbedder {
 //     e_id_to_rules: Vec<(usize, Vec<(String, NT, f64)>)>,
 //     id2e: Vec<XXXXXXXXXXX>,
-//     e2id: HashMap<XXXXXXXXXXXX, usize>
+//     e2id: HashMap<XXXXXXXXXXX, usize>
 // }
 // impl IsEmbedding for DummyEmbedder {
 //     fn get_e_id_to_rules(&self) -> &Vec<(usize, Vec<(String, NT, f64)>)> {&self.e_id_to_rules}
@@ -447,6 +475,7 @@ pub fn embed_rules(
     word_to_preterminal: &HashMap<String, Vec<(NT, f64)>>,
     bin_ntdict: &HashMap<NT, String>,
     wordcounts: (HashMap<String, f64>, f64),
+    morfdict: HashMap<String, BTreeSet<(String, Morph)>>,
     stats: &PCFGParsingStatistics)
     -> TerminalMatcher {
     
@@ -455,6 +484,7 @@ pub fn embed_rules(
         word_to_preterminal: &HashMap<String, Vec<(NT, f64)>>,
         bin_ntdict: &HashMap<NT, String>,
         wordcounts: (HashMap<String, f64>, f64),
+        morfdict: HashMap<String, BTreeSet<(String, Morph)>>,
         stats: &PCFGParsingStatistics) -> TerminalMatcher {
         match embedding_space {
             "exactmatch" => {
@@ -494,6 +524,11 @@ pub fn embed_rules(
                 embdr.build_e_to_rules(word_to_preterminal);
                 TerminalMatcher::ContinuousFrequencyMatcher(embdr)
             },
+            "affixdice" => {
+                let mut embdr = AffixDiceEmbedder { e_id_to_rules: Vec::new(), e2id: HashMap::new(), id2e: Vec::new(), morfdict: morfdict };
+                embdr.build_e_to_rules(word_to_preterminal);
+                TerminalMatcher::AffixDiceMatcher(embdr)
+            }
             _ => panic!("Incorrect feature structure / matching algorithm {} requested!", stats.feature_structures)
         }
     }
@@ -511,6 +546,6 @@ pub fn embed_rules(
         
         TerminalMatcher::JointMatcher(embdr)
     } else {
-        get_single_embedder(&stats.feature_structures, word_to_preterminal, bin_ntdict, wordcounts, stats)
+        get_single_embedder(&stats.feature_structures, word_to_preterminal, bin_ntdict, wordcounts, morfdict, stats)
     }
 }

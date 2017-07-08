@@ -175,11 +175,11 @@ fn eval_parses(testtrees: &Vec<PTBTree>, parses: Vec<Vec<(NT, (f64, PTBTree))>>,
 fn extract_and_parse(wsj_path: &str, spmrl_path: &str, mut stats: &mut PCFGParsingStatistics) -> (Vec<PTBTree>, Vec<Vec<(NT, (f64, PTBTree))>>) {
     //println!("Now loading and processing all data!");
     let t = get_usertime();
-    let ((bin_rules, bin_ntdict), initial_nts, pret_distr_all, pret_distr_le3, wordcounts, (testsents, testposs, testtrees)) = extract::get_data(wsj_path, spmrl_path, stats);
+    let ((bin_rules, bin_ntdict), initial_nts, pret_distr_all, pret_distr_le3, wordcounts, morfdict, (testsents, testposs, testtrees)) = extract::get_data(wsj_path, spmrl_path, stats);
     stats.gram_ext_bin = get_usertime() - t;
     
     //println!("Now parsing!");
-    let raw_parses = parse::agenda_cky_parse(&bin_rules, &bin_ntdict, &initial_nts, wordcounts, &testsents, &testposs, pret_distr_all, pret_distr_le3, &mut stats);
+    let raw_parses = parse::agenda_cky_parse(&bin_rules, &bin_ntdict, &initial_nts, wordcounts, morfdict, &testsents, &testposs, pret_distr_all, pret_distr_le3, &mut stats);
     let mut parses: Vec<Vec<(NT, (f64, PTBTree))>> = Vec::new();
     for cell in raw_parses {
         let candidates = debinarize_and_sort_candidates(&cell, &bin_ntdict);
@@ -199,6 +199,7 @@ fn main() {
         oov_handling: OOVHandling::MarginalLe3,
         feature_structures: "exactmatch".to_string(),
         testtagsfile: "".to_string(),
+        morftagfileprefix: "".to_string(),
         nbesttags: "1besttags".to_string(),
         dualmono_pad: false,
         logcompvalues: false,
@@ -237,6 +238,9 @@ fn main() {
         ap.refer(&mut stats.testtagsfile)
             .add_option(&["--testtagsfile"], Store,
             "POS tags of the test tag file, if parsing with --featurestructures=postagsonly");
+        ap.refer(&mut stats.morftagfileprefix)
+            .add_option(&["--morftagfileprefix"], Store,
+            "${morftagfileprefix}.${uppercase-language}.vocab{,.flatcatized}.txt are used when parsing on morphs. They contain a word and its analysis (#-sep) on each line, respectively.");
         ap.refer(&mut stats.nbesttags)
             .add_option(&["--nbesttags"], Store,
             "Parse with 1) the argmax tag (1besttags, default) 2) all possible tags and their tagger weights (nbesttags) (n/a for gold, duh) or 3) the argmax tag with weight mu and all others with weight (1-mu)/(|N|-1) (faux-nbesttags)");

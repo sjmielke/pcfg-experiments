@@ -113,6 +113,35 @@ impl<'a> ParseTree<'a> {
     }
 }
 
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Hash)]
+pub enum Morph {
+    PRE,
+    STM,
+    SUF
+}
+impl ::std::fmt::Display for Morph {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+        match *self {
+            Morph::PRE => write!(f, "PRE"),
+            Morph::STM => write!(f, "STM"),
+            Morph::SUF => write!(f, "SUF")
+        }
+    }
+}
+impl ::std::str::FromStr for Morph {
+    type Err = String;
+    
+    fn from_str(s: &str) -> Result<Morph, String> {
+        match s {
+            "PRE" => Ok(Morph::PRE),
+            "STM" => Ok(Morph::STM),
+            "SUF" => Ok(Morph::SUF),
+            _ => Err(format!("Invalid morph type »{}«", s))
+        }
+    }
+}
+
+
 // ###################################### OOV handling flag #######################################
 
 #[derive(Clone)]
@@ -164,6 +193,7 @@ pub struct PCFGParsingStatistics {
     pub uniform_oov_prob: f64,
     pub feature_structures: String,
     pub testtagsfile: String,
+    pub morftagfileprefix: String,
     pub nbesttags: String,
     pub dualmono_pad: bool,
     pub logcompvalues: bool,
@@ -195,7 +225,7 @@ pub struct PCFGParsingStatistics {
 impl PCFGParsingStatistics {
     pub fn print(&self, head: bool) {
         if head {
-            println!("language\ttrainsize\tunbin_nts\tbin_nts\toov_handling\tuniform_oov_prob\tfeature_structures\ttesttagsfile\tnbesttags\tdualmono_pad\tlogcompvalues\tkeepafterdash\teta\talpha\tbeta\tkappa\tomega\ttau\tmu\tall_terms_fallback\tonly_oovs_soft\texhaustive\tgram_ext_bin\tcky_prep\tcky_terms\tcky_higher\toov_words\toov_sents\tparsefails\tfmeasure\tfmeasure (fail ok)\ttagaccuracy");
+            println!("language\ttrainsize\tunbin_nts\tbin_nts\toov_handling\tuniform_oov_prob\tfeature_structures\ttesttagsfile\tmorftagfileprefix\tnbesttags\tdualmono_pad\tlogcompvalues\tkeepafterdash\teta\talpha\tbeta\tkappa\tomega\ttau\tmu\tall_terms_fallback\tonly_oovs_soft\texhaustive\tgram_ext_bin\tcky_prep\tcky_terms\tcky_higher\toov_words\toov_sents\tparsefails\tfmeasure\tfmeasure (fail ok)\ttagaccuracy");
         }
         print!("{}\t", self.language);
         print!("{}\t", self.trainsize);
@@ -205,6 +235,7 @@ impl PCFGParsingStatistics {
         print!("{}\t", self.uniform_oov_prob);
         print!("{}\t", self.feature_structures);
         print!("{}\t", self.testtagsfile);
+        print!("{}\t", self.morftagfileprefix);
         print!("{}\t", self.nbesttags);
         print!("{}\t", if self.dualmono_pad {"dualmonopad"} else {"fullpad"});
         print!("{}\t", if self.logcompvalues {"logcompvalues"} else {"nocompvallog"});

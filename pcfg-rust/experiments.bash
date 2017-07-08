@@ -1,6 +1,8 @@
 #! /bin/bash
 
 PCFGR="/home/student/mielke/pcfg-experiments/pcfg-rust/target/release/pcfg-rust --wsjpath=/home/student/mielke/ptb3/parsed/mrg/wsj --spmrlpath=/home/student/mielke/SPMRL_SHARED_2014"
+#BPEPATH="/home/student/mielke/pcfg-experiments/sennrich_bpe/"
+BPEPATH="/home/sjm/documents/ISI/subword-nmt/sennrich_bpe/"
 
 #   ETAVALS="0.0 0.001 0.003 0.006 0.01 0.03 0.06 0.1 0.3 0.6 0.95 1.0"
    ETAVALS="0.0 0.001 0.006 0.01 0.06 0.1 0.6 1.0"
@@ -18,6 +20,8 @@ run-baselines() {
 	$PCFGR --language=$language --trainsize=$trainsize &
 	wait
 }
+
+########################## HYPERPARAM ROUTINES ############################
 
 feat-goldtags() {
 	for beta in $BETAVALS; do
@@ -128,6 +132,19 @@ feat-ngrams() {
 	done
 }
 
+feat-affixdice() {
+	for segmenter in morfessor bpe; do
+		for chi in 0.0 0.1 0.2 0.333 0.5 1.0; do
+			for beta in 0.1 0.5 $BETAVALS; do
+				for eta in $ETAVALS; do
+					$PCFGR --language=$1 --trainsize=$2 --eta=$eta --beta=$beta --featurestructures=affixdice --chi=$chi --morftagfileprefix=../${segmenter}/SPMRL &
+				done
+				wait
+			done
+		done
+	done
+}
+
 ngrams-kappatune-constant() {
 	for kappa in 1 2 3 4 5 10 20 50 ; do
 		$PCFGR --language=$1 --trainsize=$2 --featurestructures=ngrams --kappa=$kappa &
@@ -153,7 +170,7 @@ ngrams-kappatune-optimal() {
 }
 
 tune() {
-	echo $'language\ttrainsize\tunbin_nts\tbin_nts\toov_handling\tuniform_oov_prob\tfeature_structures\ttesttagsfile\tnbesttags\tdualmono_pad\tlogcompvalues\tkeepafterdash\teta\talpha\tbeta\tkappa\tomega\ttau\tmu\tall_terms_fallback\tonly_oovs_soft\texhaustive\tgram_ext_bin\tcky_prep\tcky_terms\tcky_higher\toov_words\toov_sents\tparsefails\tfmeasure\tfmeasure (fail ok)\ttagaccuracy'
+	echo $'language\ttrainsize\tunbin_nts\tbin_nts\toov_handling\tuniform_oov_prob\tfeature_structures\ttesttagsfile\tmorftagfileprefix\tnbesttags\tdualmono_pad\tlogcompvalues\tkeepafterdash\teta\talpha\tbeta\tkappa\tomega\ttau\tmu\tall_terms_fallback\tonly_oovs_soft\texhaustive\tgram_ext_bin\tcky_prep\tcky_terms\tcky_higher\toov_words\toov_sents\tparsefails\tfmeasure\tfmeasure (fail ok)\ttagaccuracy'
 
 	for trainsize in $TRAINSIZES; do
 	# 	run-baselines                  German "$trainsize"
@@ -161,7 +178,7 @@ tune() {
 	# 	feat-varitags-1best            German "$trainsize"
 	# 	feat-varitags-nbest            German "$trainsize"
 	# 	feat-varitags-faux-nbest       German "$trainsize"
-		feat-lcsratio                  German "$trainsize"
+	# 	feat-lcsratio                  German "$trainsize"
 	# 	feat-prefixsuffix-eta-beta-tau German "$trainsize"
 	# 	feat-prefixsuffix-omega-alpha  German "$trainsize"
 	# 	feat-prefixsuffix              German "$trainsize"
@@ -170,8 +187,11 @@ tune() {
 	# 	feat-ngrams                    German "$trainsize"
 	# 	ngrams-kappatune-constant      German "$trainsize"
 	# 	ngrams-kappatune-optimal       German "$trainsize"
+		feat-affixdice                 German "$trainsize"
 	done
 }
+
+########################## MORFESSOR ############################
 
 morfessor-my-train() {
 	TRAINING_TEXT="$1"
@@ -217,16 +237,56 @@ morfize() {
 	TEXTFILE_DEVEL=$(ls /home/sjm/documents/Uni/FuzzySP/spmrl-2014/data/${LANG}_SPMRL/gold/ptb/dev/dev.*.gold.ptb.tobeparsed.raw)
 	MODEL_PREFIX="/home/sjm/documents/Uni/FuzzySP/pcfg-experiments/morfessor/SPMRL.${LANG}"
 	morfessor-my-train "$TEXTFILE_TRAIN" "$MODEL_PREFIX"
-	morfessor-my-segment "$MODEL_PREFIX" "$TEXTFILE_TRAIN" "$MODEL_PREFIX.train.flatcatized.txt"
-	morfessor-my-segment "$MODEL_PREFIX" "$TEXTFILE_DEVEL" "$MODEL_PREFIX.dev.flatcatized.txt"
+	
+	# morfessor-my-segment "$MODEL_PREFIX" "$TEXTFILE_TRAIN" "$MODEL_PREFIX.train.flatcatized.txt"
+	# morfessor-my-segment "$MODEL_PREFIX" "$TEXTFILE_DEVEL" "$MODEL_PREFIX.dev.flatcatized.txt"
+	cat "$TEXTFILE_TRAIN" "$TEXTFILE_DEVEL" | tr ' ' $'\n' | sort -u > "$MODEL_PREFIX.vocab.txt"
+	morfessor-my-segment "$MODEL_PREFIX" "$MODEL_PREFIX.vocab.txt" "$MODEL_PREFIX.vocab.flatcatized.txt"
 }
 
-# morfize GERMAN
-# morfize KOREAN
-# morfize FRENCH
-# morfize ARABIC
-tune
+########################## BPE ############################
 
+bpe-train() {
+	TRAINING_TEXT="$1"
+	MODEL_PREFIX="$2"
+	
+	python "${BPEPATH}/learn_bpe.py" \
+		< "$TRAINING_TEXT" \
+		> "$MODEL_PREFIX.bpe.codes"
+}
+
+bpe-segment() {
+	MODEL_PREFIX="$1"
+	INCOMING="$2"
+	OUTGOING="$3"
+	
+	python "${BPEPATH}/apply_bpe.py" \
+		-c "$MODEL_PREFIX.bpe.codes" \
+		-s '#STM' \
+		< "$INCOMING" \
+		| sed 's/$/#STM /' \
+		> "$OUTGOING"
+
+	paste -d '\n' \
+		<(sed 's/^/Source             : /;s/$/\nDELMEDELMEDELME/' "$INCOMING") \
+		<(sed 's/^/morf-Source-flat   : /;s/$/\n/;s/#/|/g'        "$OUTGOING") \
+		| sed '/DELMEDELMEDELME/d' \
+		| head -n 100 \
+		> "$OUTGOING.100.viz"
+}
+
+bpeize() {
+	LANG="$1"
+	TEXTFILE_TRAIN=$(ls /home/sjm/documents/Uni/FuzzySP/spmrl-2014/data/${LANG}_SPMRL/gold/ptb/train/train.*.gold.ptb.tobeparsed.raw)
+	TEXTFILE_DEVEL=$(ls /home/sjm/documents/Uni/FuzzySP/spmrl-2014/data/${LANG}_SPMRL/gold/ptb/dev/dev.*.gold.ptb.tobeparsed.raw)
+	MODEL_PREFIX="/home/sjm/documents/Uni/FuzzySP/pcfg-experiments/bpe/SPMRL.${LANG}"
+	bpe-train "$TEXTFILE_TRAIN" "$MODEL_PREFIX"
+	
+	cat "$TEXTFILE_TRAIN" "$TEXTFILE_DEVEL" | tr ' ' $'\n' | sort -u > "$MODEL_PREFIX.vocab.txt"
+	bpe-segment "$MODEL_PREFIX" "$MODEL_PREFIX.vocab.txt" "$MODEL_PREFIX.vocab.flatcatized.txt"
+}
+
+########################## BERKELEY PARSER ############################
 
 berkeley-calls() {
 	javac edu/berkeley/nlp/PCFGLA/*.java && \
@@ -246,3 +306,12 @@ berkeley-calls() {
 		-path <(head -n 100 /home/sjm/documents/Uni/FuzzySP/spmrl-2014/data/GERMAN_SPMRL/gold/ptb/dev/dev.German.gold.ptb) \
 		-treebank SINGLEFILE
 }
+
+########################## MAIN ############################
+
+for lang in GERMAN KOREAN FRENCH ARABIC; do
+	#morfize $lang
+	bpeize $lang
+done
+
+#tune
