@@ -494,10 +494,10 @@ def plot_ngrams():
 def plot_affixdice():
     for segmenter in ['morfessor', 'bpe']:
         multi_facet_plot('affixdice',
-            filenames = ["/tmp/affixdice_unweighted.log"],
+            filenames = ["/tmp/affixdice_unweighted.log", "/tmp/affixdice_unweighted2_.log", "/tmp/affixdice_unweighted2.log"],
             series_names = ['beta'],
             legend_title = '$\\beta$',
-            df_restricter = lambda df: df[df["morftagfileprefix"] == f"../{segmenter}/SPMRL"],
+            df_restricter = lambda df: df[(df["morftagfileprefix"] == f"../{segmenter}/SPMRL") & (df["beta"] > 0.0) & (df["beta"] < 30.0)],
             #ywindow_size = 7,
             #ywindow_mid = lambda bot, top: top - 7
             ).savefig(f"/tmp/plots/affixdice_{segmenter}_monsterplot_eta.pdf", format='pdf', dpi=dpi)

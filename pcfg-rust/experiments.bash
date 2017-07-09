@@ -135,7 +135,7 @@ feat-ngrams() {
 feat-affixdice() {
 	for segmenter in morfessor bpe; do
 		for chi in 0.0 0.1 0.2 0.333 0.5 1.0; do
-			for beta in 0.0 0.1 0.5 $BETAVALS 50.0 100.0; do
+			for beta in 0.1 0.5 $BETAVALS; do
 				for eta in $ETAVALS; do
 					$PCFGR --language=$1 --trainsize=$2 --eta=$eta --beta=$beta --featurestructures=affixdice --morftagfileprefix=../${segmenter}/SPMRL --chi=$chi &
 				done
