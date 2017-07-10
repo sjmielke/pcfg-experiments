@@ -312,6 +312,16 @@ def plot_pos():
         legend_extraspace = 0.07
         ).savefig('/tmp/plots/varitags_taggers_monsterplot_eta.pdf', format='pdf', dpi=dpi)
 
+def plot_brown():
+    multi_facet_plot('postagsonly',
+        filenames = ["/mnt/hylia/brown_all_1best.log"],
+        series_names = ['beta', 'testtagsfile'],
+        columnmapper = lambda t: f"({t[0]}, {t[1][25:-11]})",
+        legend_title = '$\\beta \\times$ testtagsfile',
+        #ywindow_size = 7,
+        #ywindow_mid = lambda bot, top: top - 7
+        ).savefig('/tmp/plots/brown_monsterplot_eta.pdf', format='pdf', dpi=dpi)
+
 def plot_lcs():
     # LCSRATIO
     multi_facet_plot('lcsratio',
@@ -492,16 +502,35 @@ def plot_ngrams():
                 ).savefig(f"/tmp/plots/ngrams_{paddingmode}_kappa{kappa}_monsterplot_eta.pdf", format='pdf', dpi=dpi)
 
 def plot_affixdice():
-    for segmenter in ['morfessor', 'bpe']:
-        multi_facet_plot('affixdice',
-            filenames = ["/tmp/affixdice_unweighted.log", "/tmp/affixdice_unweighted2_.log", "/tmp/affixdice_unweighted2.log"],
-            series_names = ['beta'],
-            legend_title = '$\\beta$',
-            df_restricter = lambda df: df[(df["morftagfileprefix"] == f"../{segmenter}/SPMRL") & (df["beta"] > 0.0) & (df["beta"] < 30.0)],
-            #ywindow_size = 7,
-            #ywindow_mid = lambda bot, top: top - 7
-            ).savefig(f"/tmp/plots/affixdice_{segmenter}_monsterplot_eta.pdf", format='pdf', dpi=dpi)
-
+    multi_facet_plot('affixdice',
+        filenames = [logroot + "/german_07-09_affixdice.log"],
+        series_names = ['beta'],
+        legend_title = '$\\beta$',
+        aggregator = np.max,
+        df_restricter = lambda df: df[(df["morftagfileprefix"] == f"../morfessor/SPMRL")],
+        #ywindow_size = 7,
+        #ywindow_mid = lambda bot, top: top - 7
+        ).savefig(f"/tmp/plots/affixdice_morfessor_monsterplot_eta_for_optimal_chi.pdf", format='pdf', dpi=dpi)
+    
+    multi_facet_plot('affixdice',
+        filenames = [logroot + "/german_07-09_affixdice.log"],
+        series_names = ['beta', 'chi'],
+        columnmapper = lambda t: f"{round(t[1], 4)}",
+        legend_title = '$\\chi$',
+        aggregator = np.max,
+        df_restricter = lambda df: df[(df["morftagfileprefix"] == f"../morfessor/SPMRL") & (df["beta"] == 5)],
+        #ywindow_size = 7,
+        #ywindow_mid = lambda bot, top: top - 7
+        ).savefig(f"/tmp/plots/affixdice_morfessor_monsterplot_eta_chi_for_beta_5.pdf", format='pdf', dpi=dpi)
+        
+    multi_facet_plot('affixdice',
+        filenames = [logroot + "/german_07-09_affixdice.log"],
+        series_names = ['beta'],
+        legend_title = '$\\beta$',
+        df_restricter = lambda df: df[(df["morftagfileprefix"] == f"../bpe/SPMRL") & (df["chi"] == 0.0001)],
+        #ywindow_size = 7,
+        #ywindow_mid = lambda bot, top: top - 7
+        ).savefig(f"/tmp/plots/affixdice_bpe_monsterplot_eta.pdf", format='pdf', dpi=dpi)
 
 def plot_all_40472():
     multi_facet_plot(None,
@@ -522,6 +551,7 @@ def plot_all_40472():
 # Calling!
 
 #plot_pos()
+###plot_brown()
 #plot_max_on_dev()
 #plot_lcs()
 #plot_cpcs()

@@ -1,8 +1,9 @@
 #! /bin/bash
 
-REPOROOT="/home/student/mielke/pcfg-experiments"
-PCFGR="$REPOROOT/pcfg-rust/target/release/pcfg-rust --wsjpath=/home/student/mielke/ptb3/parsed/mrg/wsj --spmrlpath=/home/student/mielke/SPMRL_SHARED_2014"
-BPEPATH="$REPOROOT/subword-nmt/"
+#cd "/home/student/mielke/pcfg-experiments/pcfg-rust"
+
+PCFGR="target/release/pcfg-rust" # --wsjpath=/home/student/mielke/ptb3/parsed/mrg/wsj --spmrlpath=/home/student/mielke/SPMRL_SHARED_2014"
+LMPLZ="/home/sjm/programming/mosesdecoder/bin/lmplz"
 
 #ETAVALS="0.0 0.001 0.003 0.006 0.01 0.03 0.06 0.1 0.3 0.6 0.95 1.0"
 ETAVALS="0.0 0.001 0.006 0.01 0.06 0.1 0.6 1.0"
@@ -63,6 +64,30 @@ feat-varitags-faux-nbest() {
 			done
 			wait
 		done
+	done
+}
+
+feat-brown-1best() {
+	NCLUSTERS="$1"
+	LANG="$2"
+	
+	languc=$(echo "$LANG" | tr [a-z] [A-Z])
+	for eta in 0.0 0.01 0.1 1.0; do
+		$PCFGR --language=$2 --trainsize=$3 --eta=$eta --featurestructures=postagsonly --testtagsfile=../brown/SPMRL.$languc.dev.c${NCLUSTERS}.browntagged --word2tagdictfile=../brown/SPMRL.$languc.train.word2tag.c${NCLUSTERS} &
+	done
+	wait
+}
+
+feat-brown-faux-nbest() {
+	NCLUSTERS="$1"
+	LANG="$2"
+	
+	languc=$(echo "$LANG" | tr [a-z] [A-Z])
+	for beta in 0.5 1 5 10 50; do
+		for eta in 0.0 0.1 1.0; do
+			$PCFGR --language=$2 --trainsize=$3 --eta=$eta --beta=$beta --featurestructures=postagsonly --testtagsfile=../brown/SPMRL.$languc.dev.c${NCLUSTERS}.browntagged --word2tagdictfile=../brown/SPMRL.$languc.train.word2tag.c${NCLUSTERS} --nbesttags=faux-nbesttags &
+		done
+		wait
 	done
 }
 
@@ -170,14 +195,18 @@ ngrams-kappatune-optimal() {
 }
 
 tune() {
-	echo $'language\ttrainsize\tunbin_nts\tbin_nts\toov_handling\tuniform_oov_prob\tfeature_structures\ttesttagsfile\tmorftagfileprefix\tnbesttags\tdualmono_pad\tlogcompvalues\tkeepafterdash\teta\talpha\tbeta\tkappa\tomega\ttau\tmu\tchi\tall_terms_fallback\tonly_oovs_soft\texhaustive\tgram_ext_bin\tcky_prep\tcky_terms\tcky_higher\toov_words\toov_sents\tparsefails\tfmeasure\tfmeasure (fail ok)\ttagaccuracy'
-
+	echo $'language\ttrainsize\tunbin_nts\tbin_nts\toov_handling\tuniform_oov_prob\tfeature_structures\ttesttagsfile\tword2tagdictfile\tmorftagfileprefix\tnbesttags\tdualmono_pad\tlogcompvalues\tkeepafterdash\teta\talpha\tbeta\tkappa\tomega\ttau\tmu\tchi\tall_terms_fallback\tonly_oovs_soft\texhaustive\tgram_ext_bin\tcky_prep\tcky_terms\tcky_higher\toov_words\toov_sents\tparsefails\tfmeasure\tfmeasure (fail ok)\ttagaccuracy'
+	
 	for trainsize in $TRAINSIZES; do
 	# 	run-baselines                  German "$trainsize"
 	# 	feat-goldtags                  German "$trainsize"
 	# 	feat-varitags-1best            German "$trainsize"
 	# 	feat-varitags-nbest            German "$trainsize"
 	# 	feat-varitags-faux-nbest       German "$trainsize"
+		feat-brown-1best 1            German "$trainsize"
+		feat-brown-1best 100          German "$trainsize"
+		feat-brown-1best 1000         German "$trainsize"
+	# 	feat-brown-faux-nbest 10       German "$trainsize"
 	# 	feat-lcsratio                  German "$trainsize"
 	# 	feat-prefixsuffix-eta-beta-tau German "$trainsize"
 	# 	feat-prefixsuffix-omega-alpha  German "$trainsize"
@@ -187,7 +216,7 @@ tune() {
 	# 	feat-ngrams                    German "$trainsize"
 	# 	ngrams-kappatune-constant      German "$trainsize"
 	# 	ngrams-kappatune-optimal       German "$trainsize"
-		feat-affixdice                 German "$trainsize"
+	# 	feat-affixdice                 German "$trainsize"
 	done
 }
 
@@ -250,7 +279,7 @@ bpe-train() {
 	TRAINING_TEXT="$1"
 	MODEL_PREFIX="$2"
 	
-	python "${BPEPATH}/learn_bpe.py" \
+	python "../subword-nmt/learn_bpe.py" \
 		< "$TRAINING_TEXT" \
 		> "$MODEL_PREFIX.bpe.codes"
 }
@@ -260,7 +289,7 @@ bpe-segment() {
 	INCOMING="$2"
 	OUTGOING="$3"
 	
-	python "${BPEPATH}/apply_bpe.py" \
+	python "../subword-nmt/apply_bpe.py" \
 		-c "$MODEL_PREFIX.bpe.codes" \
 		-s '#STM' \
 		< "$INCOMING" \
@@ -280,10 +309,65 @@ bpeize() {
 	TEXTFILE_TRAIN=$(ls /home/sjm/documents/Uni/FuzzySP/spmrl-2014/data/${LANG}_SPMRL/gold/ptb/train/train.*.gold.ptb.tobeparsed.raw)
 	TEXTFILE_DEVEL=$(ls /home/sjm/documents/Uni/FuzzySP/spmrl-2014/data/${LANG}_SPMRL/gold/ptb/dev/dev.*.gold.ptb.tobeparsed.raw)
 	MODEL_PREFIX="/home/sjm/documents/Uni/FuzzySP/pcfg-experiments/bpe/SPMRL.${LANG}"
+	
 	bpe-train "$TEXTFILE_TRAIN" "$MODEL_PREFIX"
 	
 	cat "$TEXTFILE_TRAIN" "$TEXTFILE_DEVEL" | tr ' ' $'\n' | sort -u > "$MODEL_PREFIX.vocab.txt"
 	bpe-segment "$MODEL_PREFIX" "$MODEL_PREFIX.vocab.txt" "$MODEL_PREFIX.vocab.flatcatized.txt"
+}
+
+########################## BROWN CLUSTERING ############################
+
+brownize() {
+	LANG="$1"
+	NCLUSTERS="$2"
+	
+	TEXTFILE_TRAIN=$(ls /home/sjm/documents/Uni/FuzzySP/spmrl-2014/data/${LANG}_SPMRL/gold/ptb/train/train.*.gold.ptb.tobeparsed.raw)
+	TEXTFILE_DEVEL=$(ls /home/sjm/documents/Uni/FuzzySP/spmrl-2014/data/${LANG}_SPMRL/gold/ptb/dev/dev.*.gold.ptb.tobeparsed.raw)
+	
+	cp -n "$TEXTFILE_TRAIN" "../brown/SPMRL.${LANG}.train"
+	cp -n "$TEXTFILE_DEVEL" "../brown/SPMRL.${LANG}.dev"
+	
+	pushd ../brown-cluster/
+		make
+	popd
+	
+	pushd ../brown/
+		if [ ! -s "SPMRL.${LANG}.train-c${NCLUSTERS}-p1.out/paths" ]; then
+			cp -n "SPMRL.${LANG}.train" "SPMRL.${LANG}.train.txt"
+			../brown-cluster/wcluster --text "SPMRL.${LANG}.train.txt" --c $NCLUSTERS
+			rm "SPMRL.${LANG}.train.txt"
+		fi
+		
+		if [ ! -s "SPMRL.${LANG}.brownclass.lm.arpa" ]; then
+			python3 browntagger.py "SPMRL.${LANG}.train-c${NCLUSTERS}-p1.out/paths" "" \
+				< "SPMRL.${LANG}.train" \
+				> "SPMRL.${LANG}.train.c${NCLUSTERS}.browntagged"
+			
+			"$LMPLZ" \
+				-o 5 \
+				--discount_fallback \
+				--text "SPMRL.${LANG}.train.c${NCLUSTERS}.browntagged" \
+				--arpa "SPMRL.${LANG}.train.c${NCLUSTERS}.brownclass.lm.arpa"
+			
+			# Dict for parser
+			cat "SPMRL.${LANG}.train" \
+				| tr ' ' '\n' \
+				| sed '/^$/d' \
+				| sort -u \
+				> "SPMRL.${LANG}.train.words"
+			python3 browntagger.py "SPMRL.${LANG}.train-c${NCLUSTERS}-p1.out/paths" "" \
+				< "SPMRL.${LANG}.train.words" \
+				> "SPMRL.${LANG}.train.tags.c${NCLUSTERS}"
+			paste "SPMRL.${LANG}.train.words" "SPMRL.${LANG}.train.tags.c${NCLUSTERS}" \
+				> "SPMRL.${LANG}.train.word2tag.c${NCLUSTERS}"
+			rm "SPMRL.${LANG}.train.words" "SPMRL.${LANG}.train.tags.c${NCLUSTERS}"
+		fi
+		
+		python3 browntagger.py "SPMRL.${LANG}.train-c${NCLUSTERS}-p1.out/paths" "SPMRL.${LANG}.train.c${NCLUSTERS}.brownclass.lm.arpa" \
+			< "../brown/SPMRL.${LANG}.dev" \
+			> "../brown/SPMRL.${LANG}.dev.c${NCLUSTERS}.browntagged"
+	popd
 }
 
 ########################## BERKELEY PARSER ############################
@@ -312,6 +396,9 @@ berkeley-calls() {
 # for lang in GERMAN KOREAN FRENCH ARABIC; do
 # 	morfize $lang
 # 	bpeize $lang
+# 	brownize $lang 1000
+# 	brownize $lang 100
+# 	brownize $lang 1
 # done
 
 tune

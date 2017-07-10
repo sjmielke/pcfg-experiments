@@ -1,3 +1,6 @@
 [submodule "subword-nmt"]
 	path = subword-nmt
 	url = https://github.com/rsennrich/subword-nmt.git
+[submodule "brown-cluster"]
+	path = brown-cluster
+	url = https://github.com/percyliang/brown-cluster.git

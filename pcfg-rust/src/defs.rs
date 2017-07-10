@@ -193,6 +193,7 @@ pub struct PCFGParsingStatistics {
     pub uniform_oov_prob: f64,
     pub feature_structures: String,
     pub testtagsfile: String,
+    pub word2tagdictfile: String,
     pub morftagfileprefix: String,
     pub nbesttags: String,
     pub dualmono_pad: bool,
@@ -226,7 +227,7 @@ pub struct PCFGParsingStatistics {
 impl PCFGParsingStatistics {
     pub fn print(&self, head: bool) {
         if head {
-            println!("language\ttrainsize\tunbin_nts\tbin_nts\toov_handling\tuniform_oov_prob\tfeature_structures\ttesttagsfile\tmorftagfileprefix\tnbesttags\tdualmono_pad\tlogcompvalues\tkeepafterdash\teta\talpha\tbeta\tkappa\tomega\ttau\tmu\tchi\tall_terms_fallback\tonly_oovs_soft\texhaustive\tgram_ext_bin\tcky_prep\tcky_terms\tcky_higher\toov_words\toov_sents\tparsefails\tfmeasure\tfmeasure (fail ok)\ttagaccuracy");
+            println!("language\ttrainsize\tunbin_nts\tbin_nts\toov_handling\tuniform_oov_prob\tfeature_structures\ttesttagsfile\tword2tagdictfile\tmorftagfileprefix\tnbesttags\tdualmono_pad\tlogcompvalues\tkeepafterdash\teta\talpha\tbeta\tkappa\tomega\ttau\tmu\tchi\tall_terms_fallback\tonly_oovs_soft\texhaustive\tgram_ext_bin\tcky_prep\tcky_terms\tcky_higher\toov_words\toov_sents\tparsefails\tfmeasure\tfmeasure (fail ok)\ttagaccuracy");
         }
         print!("{}\t", self.language);
         print!("{}\t", self.trainsize);
@@ -236,6 +237,7 @@ impl PCFGParsingStatistics {
         print!("{}\t", self.uniform_oov_prob);
         print!("{}\t", self.feature_structures);
         print!("{}\t", self.testtagsfile);
+        print!("{}\t", self.word2tagdictfile);
         print!("{}\t", self.morftagfileprefix);
         print!("{}\t", self.nbesttags);
         print!("{}\t", if self.dualmono_pad {"dualmonopad"} else {"fullpad"});

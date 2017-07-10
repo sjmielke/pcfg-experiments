@@ -175,11 +175,11 @@ fn eval_parses(testtrees: &Vec<PTBTree>, parses: Vec<Vec<(NT, (f64, PTBTree))>>,
 fn extract_and_parse(wsj_path: &str, spmrl_path: &str, mut stats: &mut PCFGParsingStatistics) -> (Vec<PTBTree>, Vec<Vec<(NT, (f64, PTBTree))>>) {
     //println!("Now loading and processing all data!");
     let t = get_usertime();
-    let ((bin_rules, bin_ntdict), initial_nts, pret_distr_all, pret_distr_le3, wordcounts, morfdict, (testsents, testposs, testtrees)) = extract::get_data(wsj_path, spmrl_path, stats);
+    let ((bin_rules, bin_ntdict), initial_nts, pret_distr_all, pret_distr_le3, wordcounts, word2tag, morfdict, (testsents, testposs, testtrees)) = extract::get_data(wsj_path, spmrl_path, stats);
     stats.gram_ext_bin = get_usertime() - t;
     
     //println!("Now parsing!");
-    let raw_parses = parse::agenda_cky_parse(&bin_rules, &bin_ntdict, &initial_nts, wordcounts, morfdict, &testsents, &testposs, pret_distr_all, pret_distr_le3, &mut stats);
+    let raw_parses = parse::agenda_cky_parse(&bin_rules, &bin_ntdict, &initial_nts, wordcounts, word2tag, morfdict, &testsents, &testposs, pret_distr_all, pret_distr_le3, &mut stats);
     let mut parses: Vec<Vec<(NT, (f64, PTBTree))>> = Vec::new();
     for cell in raw_parses {
         let candidates = debinarize_and_sort_candidates(&cell, &bin_ntdict);
@@ -199,6 +199,7 @@ fn main() {
         oov_handling: OOVHandling::MarginalLe3,
         feature_structures: "exactmatch".to_string(),
         testtagsfile: "".to_string(),
+        word2tagdictfile: "".to_string(),
         morftagfileprefix: "".to_string(),
         nbesttags: "1besttags".to_string(),
         dualmono_pad: false,
@@ -239,6 +240,9 @@ fn main() {
         ap.refer(&mut stats.testtagsfile)
             .add_option(&["--testtagsfile"], Store,
             "POS tags of the test tag file, if parsing with --featurestructures=postagsonly");
+        ap.refer(&mut stats.word2tagdictfile)
+            .add_option(&["--word2tagdictfile"], Store,
+            "POS tags for words of the rules, if parsing with --featurestructures=postagsonly. Format: $word\\t$tag\\n");
         ap.refer(&mut stats.morftagfileprefix)
             .add_option(&["--morftagfileprefix"], Store,
             "${morftagfileprefix}.${uppercase-language}.vocab{,.flatcatized}.txt are used when parsing on morphs. They contain a word and its analysis (#-sep) on each line, respectively.");

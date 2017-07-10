@@ -72,6 +72,7 @@ pub struct POSTagEmbedder {
     e2id: HashMap<(POSTag, BTreeMap<POSTag, LogProb>), usize>,
     
     bin_ntdict: HashMap<NT, String>,
+    word2tag: Option<HashMap<String, String>>,
     faux_nbesttags: bool,
     nbesttags: bool,
     mu: f64
@@ -91,8 +92,11 @@ impl IsEmbedding for POSTagEmbedder {
         }
     }
     fn embed_rule(&mut self, rule: &(&str, NT, f64)) -> usize {
-        let &(_, nt, _) = rule;
-        let tag = self.bin_ntdict.get(&nt).unwrap().clone();
+        let &(w, nt, _) = rule;
+        let tag = match self.word2tag {
+            None => self.bin_ntdict.get(&nt).unwrap().clone(),
+            Some(ref w2t) => w2t[w].clone()
+        };
         let mut cpd: BTreeMap<String, LogProb> = BTreeMap::new();
         cpd.insert(tag.clone(), LogProb(0.0));
         let e = (tag, cpd);
@@ -481,6 +485,7 @@ pub fn embed_rules(
     word_to_preterminal: &HashMap<String, Vec<(NT, f64)>>,
     bin_ntdict: &HashMap<NT, String>,
     wordcounts: (HashMap<String, f64>, f64),
+    word2tag: Option<HashMap<String, String>>,
     morfdict: HashMap<String, BTreeSet<(String, Morph)>>,
     stats: &PCFGParsingStatistics)
     -> TerminalMatcher {
@@ -490,6 +495,7 @@ pub fn embed_rules(
         word_to_preterminal: &HashMap<String, Vec<(NT, f64)>>,
         bin_ntdict: &HashMap<NT, String>,
         wordcounts: (HashMap<String, f64>, f64),
+        word2tag: Option<HashMap<String, String>>,
         morfdict: HashMap<String, BTreeSet<(String, Morph)>>,
         stats: &PCFGParsingStatistics) -> TerminalMatcher {
         match embedding_space {
@@ -500,7 +506,7 @@ pub fn embed_rules(
             },
             "postagsonly" => {
                 assert!(stats.nbesttags == "nbesttags" || stats.nbesttags == "faux-nbesttags" || stats.nbesttags == "1besttags");
-                let mut embdr = POSTagEmbedder { e_id_to_rules: Vec::new(), e2id: HashMap::new(), id2e: Vec::new(), bin_ntdict: bin_ntdict.clone(), nbesttags: stats.nbesttags == "nbesttags", faux_nbesttags: stats.nbesttags == "faux-nbesttags", mu: stats.mu };
+                let mut embdr = POSTagEmbedder { e_id_to_rules: Vec::new(), e2id: HashMap::new(), id2e: Vec::new(), bin_ntdict: bin_ntdict.clone(), nbesttags: stats.nbesttags == "nbesttags", faux_nbesttags: stats.nbesttags == "faux-nbesttags", mu: stats.mu, word2tag: word2tag };
                 embdr.build_e_to_rules(word_to_preterminal);
                 TerminalMatcher::POSTagMatcher(embdr)
             },
@@ -559,6 +565,6 @@ pub fn embed_rules(
         
         TerminalMatcher::JointMatcher(embdr)
     } else {
-        get_single_embedder(&stats.feature_structures, word_to_preterminal, bin_ntdict, wordcounts, morfdict, stats)
+        get_single_embedder(&stats.feature_structures, word_to_preterminal, bin_ntdict, wordcounts, word2tag, morfdict, stats)
     }
 }

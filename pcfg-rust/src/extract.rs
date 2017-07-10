@@ -324,9 +324,21 @@ pub fn read_morfdictfile(filename_prefix: &str, uppercase_language: &str) -> Has
     morfdict
 }
 
+pub fn read_word2tagdict(filename: &str) -> HashMap<String, String> {
+    let mut w2t: HashMap<String, String> = HashMap::new();
+    for line in readfile(filename).split("\n").filter(|l| *l != "") {
+        let pair: Vec<_> = line.split("\t").collect();
+        if pair.len() != 2 {
+            panic!("Crazy pair: {:?}", pair)
+        }
+        assert_eq!(w2t.insert(pair[0].to_string(), pair[1].to_string()), None)
+    }
+    w2t
+}
+
 
 pub fn get_data(wsj_path: &str, spmrl_path: &str, stats: &mut PCFGParsingStatistics)
-        -> ((HashMap<NT, HashMap<RHS, f64>>, HashMap<NT, String>), Vec<NT>, HashMap<NT, f64>, HashMap<NT, f64>, (HashMap<String, f64>, f64), HashMap<String, BTreeSet<(String, Morph)>>, (Vec<String>, Vec<Vec<Vec<(POSTag, f64)>>>, Vec<PTBTree>))  {
+        -> ((HashMap<NT, HashMap<RHS, f64>>, HashMap<NT, String>), Vec<NT>, HashMap<NT, f64>, HashMap<NT, f64>, (HashMap<String, f64>, f64), Option<HashMap<String, String>>, HashMap<String, BTreeSet<(String, Morph)>>, (Vec<String>, Vec<Vec<Vec<(POSTag, f64)>>>, Vec<PTBTree>))  {
     
     fn read_caseinsensitive(prefix: &String, camellang: &String, stats: &PCFGParsingStatistics, bracketing: bool) -> Result<Vec<PTBTree>, Box<::std::error::Error>> {
         let name1 = prefix.to_string() + &camellang + ".gold.ptb";
@@ -371,6 +383,11 @@ pub fn get_data(wsj_path: &str, spmrl_path: &str, stats: &mut PCFGParsingStatist
     let mut testposs = read_testtagsfile(&stats.testtagsfile, gold_testposs, maxlen);
     
     let morfdict: HashMap<String, BTreeSet<(String, Morph)>> = read_morfdictfile(&stats.morftagfileprefix, &lang);
+    let word2tag: Option<HashMap<String, String>> = if &stats.word2tagdictfile != "" {
+        Some(read_word2tagdict(&stats.word2tagdictfile))
+    } else {
+        None
+    };
     
     if lang == "ENGLISH" {
         testsents.truncate(500);
@@ -400,5 +417,5 @@ pub fn get_data(wsj_path: &str, spmrl_path: &str, stats: &mut PCFGParsingStatist
     stats.unbin_nts = unb_ntdict.len();
     stats.bin_nts   = bin_ntdict.len();
     
-    ((bin_rules, bin_ntdict), initial_nts, pret_distr_all, pret_distr_le3, wordcounts, morfdict, (testsents, testposs, testtrees))
+    ((bin_rules, bin_ntdict), initial_nts, pret_distr_all, pret_distr_le3, wordcounts, word2tag, morfdict, (testsents, testposs, testtrees))
 }
