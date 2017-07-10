@@ -411,4 +411,6 @@ berkeley-calls() {
 # 	brownize $lang 100
 # done
 
-tune
+brownize GERMAN 1000
+brownize GERMAN 100
+#tune

@@ -314,13 +314,33 @@ def plot_pos():
 
 def plot_brown():
     multi_facet_plot('postagsonly',
-        filenames = ["/mnt/hylia/brown_all_1best.log"],
+        filenames = [logroot + "/german_07-10_brown.log"],
+        df_restricter = lambda df: df[df["nbesttags"] == "1besttags"],
         series_names = ['beta', 'testtagsfile'],
-        columnmapper = lambda t: f"({t[0]}, {t[1][25:-11]})",
-        legend_title = '$\\beta \\times$ testtagsfile',
+        columnmapper = lambda t: f"{t[1][27:-12]}",
+        legend_title = "\\#clusters",
         #ywindow_size = 7,
         #ywindow_mid = lambda bot, top: top - 7
-        ).savefig('/tmp/plots/brown_monsterplot_eta.pdf', format='pdf', dpi=dpi)
+        ).savefig('/tmp/plots/brown_1best_monsterplot_eta.pdf', format='pdf', dpi=dpi)
+    
+    multi_facet_plot('postagsonly',
+        filenames = [logroot + "/german_07-10_brown.log"],
+        df_restricter = lambda df: df[df["nbesttags"] == "faux-nbesttags"],
+        series_names = ['beta', 'testtagsfile'],
+        columnmapper = lambda t: f"{t[0]}, {t[1][27:-12]}",
+        legend_title = "$\\beta \\;\\times$ \\#clusters",
+        #ywindow_size = 7,
+        #ywindow_mid = lambda bot, top: top - 7
+        ).savefig('/tmp/plots/brown_fauxnbest_monsterplot_eta.pdf', format='pdf', dpi=dpi)
+
+def plot_freq_cont():
+    multi_facet_plot('freq-cont',
+        filenames = [logroot + "/german_07-10_freq-cont.log"],
+        series_names = ['beta'],
+        legend_title = '$\\beta$',
+        ywindow_size = 4,
+        ywindow_mid = lambda bot, top: top - 4
+        ).savefig('/tmp/plots/freq_cont_monsterplot_eta.pdf', format='pdf', dpi=dpi)
 
 def plot_lcs():
     # LCSRATIO
@@ -552,10 +572,11 @@ def plot_all_40472():
 
 #plot_pos()
 plot_brown()
+plot_freq_cont()
 #plot_max_on_dev()
 #plot_lcs()
 #plot_cpcs()
 #plot_levenshtein()
 #plot_ngrams()
-#plot_affixdice()
+plot_affixdice()
 #plot_all_40472()
