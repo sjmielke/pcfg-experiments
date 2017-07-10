@@ -97,6 +97,7 @@ impl IsEmbedding for POSTagEmbedder {
             None => self.bin_ntdict.get(&nt).unwrap().clone(),
             Some(ref w2t) => w2t[w].clone()
         };
+        //println!("»{}«", tag);
         let mut cpd: BTreeMap<String, LogProb> = BTreeMap::new();
         cpd.insert(tag.clone(), LogProb(0.0));
         let e = (tag, cpd);
@@ -114,6 +115,7 @@ impl IsEmbedding for POSTagEmbedder {
             btm.insert(p.to_string(), LogProb(lp));
         }
         // only if gold tags // assert_eq!(max_lp, 0.0);
+        //println!("«{}»", max_pos);
         let e = (max_pos.to_string(), btm);
         get_id(&e, &mut self.id2e, &mut self.e2id)
     }

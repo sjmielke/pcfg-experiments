@@ -1,6 +1,6 @@
 #! /bin/bash
 
-#cd "/home/student/mielke/pcfg-experiments/pcfg-rust"
+cd "/home/student/mielke/pcfg-experiments/pcfg-rust"
 
 PCFGR="target/release/pcfg-rust" # --wsjpath=/home/student/mielke/ptb3/parsed/mrg/wsj --spmrlpath=/home/student/mielke/SPMRL_SHARED_2014"
 LMPLZ="/home/sjm/programming/mosesdecoder/bin/lmplz"
@@ -72,7 +72,7 @@ feat-brown-1best() {
 	LANG="$2"
 	
 	languc=$(echo "$LANG" | tr [a-z] [A-Z])
-	for eta in 0.0 0.01 0.1 1.0; do
+	for eta in $ETAVALS; do
 		$PCFGR --language=$2 --trainsize=$3 --eta=$eta --featurestructures=postagsonly --testtagsfile=../brown/SPMRL.$languc.dev.c${NCLUSTERS}.browntagged --word2tagdictfile=../brown/SPMRL.$languc.train.word2tag.c${NCLUSTERS} &
 	done
 	wait
@@ -83,8 +83,8 @@ feat-brown-faux-nbest() {
 	LANG="$2"
 	
 	languc=$(echo "$LANG" | tr [a-z] [A-Z])
-	for beta in 0.5 1 5 10 50; do
-		for eta in 0.0 0.1 1.0; do
+	for beta in 0.5 1 1.5 2 5; do
+		for eta in $ETAVALS; do
 			$PCFGR --language=$2 --trainsize=$3 --eta=$eta --beta=$beta --featurestructures=postagsonly --testtagsfile=../brown/SPMRL.$languc.dev.c${NCLUSTERS}.browntagged --word2tagdictfile=../brown/SPMRL.$languc.train.word2tag.c${NCLUSTERS} --nbesttags=faux-nbesttags &
 		done
 		wait
@@ -203,10 +203,10 @@ tune() {
 	# 	feat-varitags-1best            German "$trainsize"
 	# 	feat-varitags-nbest            German "$trainsize"
 	# 	feat-varitags-faux-nbest       German "$trainsize"
-		feat-brown-1best 1            German "$trainsize"
-		feat-brown-1best 100          German "$trainsize"
-		feat-brown-1best 1000         German "$trainsize"
-	# 	feat-brown-faux-nbest 10       German "$trainsize"
+		feat-brown-1best 100           German "$trainsize"
+		feat-brown-1best 1000          German "$trainsize"
+		feat-brown-faux-nbest 100      German "$trainsize"
+		feat-brown-faux-nbest 1000     German "$trainsize"
 	# 	feat-lcsratio                  German "$trainsize"
 	# 	feat-prefixsuffix-eta-beta-tau German "$trainsize"
 	# 	feat-prefixsuffix-omega-alpha  German "$trainsize"
@@ -358,6 +358,7 @@ brownize() {
 				> "SPMRL.${LANG}.train.words"
 			python3 browntagger.py "SPMRL.${LANG}.train-c${NCLUSTERS}-p1.out/paths" "" \
 				< "SPMRL.${LANG}.train.words" \
+				| sed 's#/0.0$##' \
 				> "SPMRL.${LANG}.train.tags.c${NCLUSTERS}"
 			paste "SPMRL.${LANG}.train.words" "SPMRL.${LANG}.train.tags.c${NCLUSTERS}" \
 				> "SPMRL.${LANG}.train.word2tag.c${NCLUSTERS}"
@@ -398,7 +399,6 @@ berkeley-calls() {
 # 	bpeize $lang
 # 	brownize $lang 1000
 # 	brownize $lang 100
-# 	brownize $lang 1
 # done
 
 tune

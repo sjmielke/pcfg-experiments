@@ -551,11 +551,11 @@ def plot_all_40472():
 # Calling!
 
 #plot_pos()
-###plot_brown()
+plot_brown()
 #plot_max_on_dev()
 #plot_lcs()
 #plot_cpcs()
 #plot_levenshtein()
 #plot_ngrams()
-plot_affixdice()
+#plot_affixdice()
 #plot_all_40472()
