@@ -2,7 +2,7 @@
 
 cd "/home/student/mielke/pcfg-experiments/pcfg-rust"
 
-PCFGR="target/release/pcfg-rust" # --wsjpath=/home/student/mielke/ptb3/parsed/mrg/wsj --spmrlpath=/home/student/mielke/SPMRL_SHARED_2014"
+PCFGR="target/release/pcfg-rust --wsjpath=/home/student/mielke/ptb3/parsed/mrg/wsj --spmrlpath=/home/student/mielke/SPMRL_SHARED_2014"
 LMPLZ="/home/sjm/programming/mosesdecoder/bin/lmplz"
 
 #ETAVALS="0.0 0.001 0.003 0.006 0.01 0.03 0.06 0.1 0.3 0.6 0.95 1.0"
