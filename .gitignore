@@ -4,3 +4,4 @@ pos-tagging/data/ptb*
 pos-tagging/data/*GERMAN*
 morfessor/SPMRL.*
 bpe/SPMRL.*
+brown/SPMRL.*
