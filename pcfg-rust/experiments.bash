@@ -91,6 +91,15 @@ feat-brown-faux-nbest() {
 	done
 }
 
+feat-freq-cont() {
+	for beta in 1 10 100 1000 10000 100000 1000000; do
+		for eta in $ETAVALS; do
+			$PCFGR --language=$1 --trainsize=$2 --eta=$eta --beta=$beta --featurestructures=freq-cont &
+		done
+		wait
+	done
+}
+
 feat-lcsratio() {
 	for beta in $BETAVALS; do
 		for eta in $ETAVALS; do
@@ -198,25 +207,26 @@ tune() {
 	echo $'language\ttrainsize\tunbin_nts\tbin_nts\toov_handling\tuniform_oov_prob\tfeature_structures\ttesttagsfile\tword2tagdictfile\tmorftagfileprefix\tnbesttags\tdualmono_pad\tlogcompvalues\tkeepafterdash\teta\talpha\tbeta\tkappa\tomega\ttau\tmu\tchi\tall_terms_fallback\tonly_oovs_soft\texhaustive\tgram_ext_bin\tcky_prep\tcky_terms\tcky_higher\toov_words\toov_sents\tparsefails\tfmeasure\tfmeasure (fail ok)\ttagaccuracy'
 	
 	for trainsize in $TRAINSIZES; do
-	# 	run-baselines                  German "$trainsize"
-	# 	feat-goldtags                  German "$trainsize"
-	# 	feat-varitags-1best            German "$trainsize"
-	# 	feat-varitags-nbest            German "$trainsize"
-	# 	feat-varitags-faux-nbest       German "$trainsize"
-		feat-brown-1best 100           German "$trainsize"
-		feat-brown-1best 1000          German "$trainsize"
-		feat-brown-faux-nbest 100      German "$trainsize"
-		feat-brown-faux-nbest 1000     German "$trainsize"
-	# 	feat-lcsratio                  German "$trainsize"
-	# 	feat-prefixsuffix-eta-beta-tau German "$trainsize"
-	# 	feat-prefixsuffix-omega-alpha  German "$trainsize"
-	# 	feat-prefixsuffix              German "$trainsize"
-	# 	lcsratio-alphatune             German "$trainsize"
-	# 	feat-levenshtein               German "$trainsize"
-	# 	feat-ngrams                    German "$trainsize"
-	# 	ngrams-kappatune-constant      German "$trainsize"
-	# 	ngrams-kappatune-optimal       German "$trainsize"
-	# 	feat-affixdice                 German "$trainsize"
+		# run-baselines                  German "$trainsize"
+		# feat-goldtags                  German "$trainsize"
+		# feat-varitags-1best            German "$trainsize"
+		# feat-varitags-nbest            German "$trainsize"
+		# feat-varitags-faux-nbest       German "$trainsize"
+		# feat-brown-1best 100           German "$trainsize"
+		# feat-brown-1best 1000          German "$trainsize"
+		# feat-brown-faux-nbest 100      German "$trainsize"
+		# feat-brown-faux-nbest 1000     German "$trainsize"
+		feat-freq-cont                 German "$trainsize"
+		# feat-lcsratio                  German "$trainsize"
+		# feat-prefixsuffix-eta-beta-tau German "$trainsize"
+		# feat-prefixsuffix-omega-alpha  German "$trainsize"
+		# feat-prefixsuffix              German "$trainsize"
+		# lcsratio-alphatune             German "$trainsize"
+		# feat-levenshtein               German "$trainsize"
+		# feat-ngrams                    German "$trainsize"
+		# ngrams-kappatune-constant      German "$trainsize"
+		# ngrams-kappatune-optimal       German "$trainsize"
+		# feat-affixdice                 German "$trainsize"
 	done
 }
 
