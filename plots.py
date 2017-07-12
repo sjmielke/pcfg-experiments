@@ -178,7 +178,7 @@ def multi_facet_plot(
                     plot_df[series].plot(ax=ax[j][i], marker=marker, markersize=3)
             
             if x_name in ['eta', 'kappa', 'trainsize']:
-                ax[j][i].set_xscale('symlog', linthreshx=0.001, linscalex=0.2)
+                ax[j][i].set_xscale('symlog', linthreshx=0.001, linscalex=0.35)
             
             if x_name == 'kappa':
                 ax[j][i].set_xticks([1,2,3,4,5,10])
@@ -222,7 +222,7 @@ def plot_max_on_dev():
 
     multi_facet_plot(None,
         # Add levenshtien portion back in from [logroot + "/german_megatune.log", logroot + "/german_apocalypsetune_coarse.log"]
-        filenames = [logroot + "/german_06-27_baselines.log", logroot + "/german_06-23_prefixsuffix_eta06_beta10_tau05.log", logroot + "/german_06-21_prefixsuffix_alpha02_omega05.log", logroot + "/german_06-10_lcs_alphatune.log", logroot + "/german_06-10_ngrams_omnitune.log", logroot + "/german_06-11_ngrams_eta0001.log", logroot + "/german_06-20_ngrams_etabetakappa_kappa4_le500.log", logroot + "/german_06-20_ngrams_etabetakappa_kappa4_gt500.log", logroot + "/german_06-23_prefixsuffix_eta06_beta10_tau05.log", logroot + "/german_06-21_prefixsuffix_alpha02_omega05.log", logroot + "/german_06-24_varitags_1best.log", logroot + "/german_06-24_varitags_nbest.log", logroot + "/german_06-26_varitags_1best_10k.log"],
+        filenames = [logroot + "/german_06-27_baselines.log", logroot + "/german_06-23_prefixsuffix_eta06_beta10_tau05.log", logroot + "/german_06-21_prefixsuffix_alpha02_omega05.log", logroot + "/german_06-10_lcs_alphatune.log", logroot + "/german_06-10_ngrams_omnitune.log", logroot + "/german_06-11_ngrams_eta0001.log", logroot + "/german_06-20_ngrams_etabetakappa_kappa4_le500.log", logroot + "/german_06-20_ngrams_etabetakappa_kappa4_gt500.log", logroot + "/german_06-23_prefixsuffix_eta06_beta10_tau05.log", logroot + "/german_06-21_prefixsuffix_alpha02_omega05.log", logroot + "/german_06-24_varitags_1best.log", logroot + "/german_06-24_varitags_nbest.log", logroot + "/german_06-26_varitags_1best_10k.log", ],
         df_restricter = lambda df: restricter_lambdas(df, testtagsfile = lambda f: "gold" not in f and "40472" not in f if isinstance(f, str) else True, trainsize = lambda ts: ts in [100,500,1000,10000], eta = lambda e: e > 0.0),
         series_names = ['feature_structures', 'nbesttags', 'oov_handling'],
         columnmapper = spacename,
@@ -314,24 +314,42 @@ def plot_pos():
 
 def plot_brown():
     multi_facet_plot('postagsonly',
-        filenames = [logroot + "/german_07-10_brown.log"],
+        filenames = [logroot + "/german_07-10_brown.log", logroot + "/german_07-12_brown_10k.log"],
         df_restricter = lambda df: df[df["nbesttags"] == "1besttags"],
         series_names = ['beta', 'testtagsfile'],
         columnmapper = lambda t: f"{t[1][27:-12]}",
-        legend_title = "\\#clusters",
+        legend_title = "$\\nu$",
         #ywindow_size = 7,
         #ywindow_mid = lambda bot, top: top - 7
         ).savefig('/tmp/plots/brown_1best_monsterplot_eta.pdf', format='pdf', dpi=dpi)
     
     multi_facet_plot('postagsonly',
-        filenames = [logroot + "/german_07-10_brown.log"],
+        filenames = [logroot + "/german_07-10_brown.log", logroot + "/german_07-12_brown_10k.log"],
         df_restricter = lambda df: df[df["nbesttags"] == "faux-nbesttags"],
         series_names = ['beta', 'testtagsfile'],
         columnmapper = lambda t: f"{t[0]}, {t[1][27:-12]}",
-        legend_title = "$\\beta \\;\\times$ \\#clusters",
+        legend_title = "$\\beta \\times \\nu$",
         #ywindow_size = 7,
         #ywindow_mid = lambda bot, top: top - 7
         ).savefig('/tmp/plots/brown_fauxnbest_monsterplot_eta.pdf', format='pdf', dpi=dpi)
+    
+    multi_facet_plot('postagsonly',
+        filenames = [logroot + "/german_07-10_brown.log", logroot + "/german_07-12_brown_10k.log"],
+        df_restricter = lambda df: df[(df["nbesttags"] == "faux-nbesttags") & (df["testtagsfile"] == "../brown/SPMRL.GERMAN.dev.c100.browntagged")],
+        series_names = ['beta'],
+        legend_title = "$\\beta$",
+        #ywindow_size = 7,
+        #ywindow_mid = lambda bot, top: top - 7
+        ).savefig('/tmp/plots/brown_fauxnbest_monsterplot_eta_nu_100.pdf', format='pdf', dpi=dpi)
+    
+    multi_facet_plot('postagsonly',
+        filenames = [logroot + "/german_07-10_brown.log", logroot + "/german_07-12_brown_10k.log"],
+        df_restricter = lambda df: df[(df["nbesttags"] == "faux-nbesttags") & (df["testtagsfile"] == "../brown/SPMRL.GERMAN.dev.c1000.browntagged")],
+        series_names = ['beta'],
+        legend_title = "$\\beta$",
+        #ywindow_size = 7,
+        #ywindow_mid = lambda bot, top: top - 7
+        ).savefig('/tmp/plots/brown_fauxnbest_monsterplot_eta_nu_1000.pdf', format='pdf', dpi=dpi)
 
 def plot_freq_cont():
     multi_facet_plot('freq-cont',
@@ -537,12 +555,20 @@ def plot_affixdice():
         series_names = ['beta', 'chi'],
         columnmapper = lambda t: f"{round(t[1], 4)}",
         legend_title = '$\\chi$',
-        aggregator = np.max,
         df_restricter = lambda df: df[(df["morftagfileprefix"] == f"../morfessor/SPMRL") & (df["beta"] == 5)],
         #ywindow_size = 7,
         #ywindow_mid = lambda bot, top: top - 7
         ).savefig(f"/tmp/plots/affixdice_morfessor_monsterplot_eta_chi_for_beta_5.pdf", format='pdf', dpi=dpi)
-        
+    
+    multi_facet_plot('affixdice',
+        filenames = [logroot + "/german_07-09_affixdice.log"],
+        series_names = ['beta'],
+        legend_title = '$\\chi$',
+        df_restricter = lambda df: df[(df["morftagfileprefix"] == f"../morfessor/SPMRL") & (df["chi"] == 0.5)],
+        #ywindow_size = 7,
+        #ywindow_mid = lambda bot, top: top - 7
+        ).savefig(f"/tmp/plots/affixdice_morfessor_monsterplot_eta_beta_for_chi_05.pdf", format='pdf', dpi=dpi)
+    
     multi_facet_plot('affixdice',
         filenames = [logroot + "/german_07-09_affixdice.log"],
         series_names = ['beta'],
@@ -570,13 +596,13 @@ def plot_all_40472():
 
 # Calling!
 
-#plot_pos()
+# plot_pos()
 plot_brown()
-plot_freq_cont()
-#plot_max_on_dev()
-#plot_lcs()
-#plot_cpcs()
-#plot_levenshtein()
-#plot_ngrams()
-plot_affixdice()
+# plot_freq_cont()
+# plot_lcs()
+# plot_cpcs()
+# plot_levenshtein()
+# plot_ngrams()
+# plot_affixdice()
+plot_max_on_dev()
 #plot_all_40472()

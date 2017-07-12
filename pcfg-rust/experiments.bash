@@ -45,7 +45,7 @@ feat-varitags-1best() {
 
 feat-varitags-nbest() {
 	languc=$(echo $1 | tr [a-z] [A-Z])
-	for suffix in "$2.pred --nbesttags" "40472.pred --nbesttags"; do
+	for suffix in "$2.pred --nbesttags=nbesttags" "40472.pred --nbesttags=nbesttags"; do
 		for beta in 0.1 0.5 1.0 1.5 2.0 5.0; do
 			for eta in $ETAVALS; do
 				$PCFGR --language=$1 --trainsize=$2 --eta=$eta --beta=$beta --featurestructures=postagsonly --testtagsfile=../pos-tagging/data/spmrl.$languc.dev.sklearn_tagged.$suffix &
@@ -230,6 +230,27 @@ tune() {
 	done
 }
 
+evalall() {
+	echo $'language\ttrainsize\tunbin_nts\tbin_nts\toov_handling\tuniform_oov_prob\tfeature_structures\ttesttagsfile\tword2tagdictfile\tmorftagfileprefix\tnbesttags\tdualmono_pad\tlogcompvalues\tkeepafterdash\teta\talpha\tbeta\tkappa\tomega\ttau\tmu\tchi\tall_terms_fallback\tonly_oovs_soft\texhaustive\tgram_ext_bin\tcky_prep\tcky_terms\tcky_higher\toov_words\toov_sents\tparsefails\tfmeasure\tfmeasure (fail ok)\ttagaccuracy'
+	
+	languc=$(echo "$LANG" | tr [a-z] [A-Z])
+	
+	for trainsize in $TRAINSIZES; do
+		$PCFGR --language=$1 --trainsize=$trainsize --eta=1.0   --beta=1.0 --featurestructures=postagsonly --nbesttags=faux-nbesttags &
+		$PCFGR --language=$1 --trainsize=$trainsize --eta=0.006 --beta=1.5 --featurestructures=postagsonly --testtagsfile=../pos-tagging/data/spmrl.$languc.dev.sklearn_tagged.40472.pred --nbesttags=nbesttags &
+		$PCFGR --language=$1 --trainsize=$trainsize --eta=0.01  --beta=1.0 --featurestructures=postagsonly --testtagsfile=../brown/SPMRL.${languc}.dev.c100.browntagged --word2tagdictfile=../brown/SPMRL.${languc}.train.word2tag.c100 --nbesttags=faux-nbesttags &
+		$PCFGR --language=$1 --trainsize=$trainsize --eta=0.01  --beta=1.0 --featurestructures=postagsonly --testtagsfile=../brown/SPMRL.${languc}.dev.c1000.browntagged --word2tagdictfile=../brown/SPMRL.${languc}.train.word2tag.c1000 --nbesttags=faux-nbesttags &
+		$PCFGR --language=$1 --trainsize=$trainsize --eta=0.1   --beta=10  --featurestructures=lcsratio &
+		wait
+		$PCFGR --language=$1 --trainsize=$trainsize --eta=0.6   --beta=10  --featurestructures=prefixsuffix --tau=0.5 &
+		$PCFGR --language=$1 --trainsize=$trainsize --eta=0.1   --beta=10  --featurestructures=levenshtein &
+		$PCFGR --language=$1 --trainsize=$trainsize --eta=1.0   --beta=10  --featurestructures=ngrams --kappa=4 &
+		$PCFGR --language=$1 --trainsize=$trainsize --eta=0.1   --beta=5   --featurestructures=affixdice --morftagfileprefix=../morfessor/SPMRL --chi=0.5 &
+		$PCFGR --language=$1 --trainsize=$trainsize --eta=0.1   --beta=5   --featurestructures=affixdice --morftagfileprefix=../bpe/SPMRL &
+		wait
+	done
+}
+
 ########################## MORFESSOR ############################
 
 morfessor-my-train() {
@@ -383,34 +404,65 @@ brownize() {
 
 ########################## BERKELEY PARSER ############################
 
-berkeley-calls() {
-	javac edu/berkeley/nlp/PCFGLA/*.java && \
+berkeley-baseline() {
+	lang="$1"
+	smcycles="$2"
 	
-	java edu.berkeley.nlp.PCFGLA.GrammarTrainer \
-		-path /home/sjm/documents/Uni/FuzzySP/spmrl-2014/data/GERMAN_SPMRL/gold/ptb/train5k/train5k.German.gold.ptb \
-		-out /tmp/bp/grammar \
+	javac edu/berkeley/nlp/PCFGLA/*.java
+	
+	java \
+		edu.berkeley.nlp.PCFGLA.GrammarTrainer \
+		-path /home/sjm/documents/Uni/FuzzySP/pure-treebanks/${lang}.train.tb \
+		-out /mnt/hylia/bp/${lang}.bpgrammar.nosmooth \
 		-treebank SINGLEFILE \
-		-SMcycles 0 -sm1 0 -sm2 0
+		-SMcycles ${smcycles} -sm1 0 -sm2 0
+	
+	java \
+		edu.berkeley.nlp.PCFGLA.GrammarTrainer \
+		-path /home/sjm/documents/Uni/FuzzySP/pure-treebanks/${lang}.train.tb \
+		-out /mnt/hylia/bp/${lang}.bpgrammar.smooth \
+		-treebank SINGLEFILE \
+		-SMcycles ${smcycles}
 	
 	# java edu.berkeley.nlp.PCFGLA.WriteGrammarToTextFile /tmp/bp/grammar /tmp/bp/grammar
 	
 	# java edu.berkeley.nlp.PCFGLA.BerkeleyParser -gr /tmp/bp/grammar -inputFile <(echo "Ich sah ein Objekt in der Ferne .")
 	
-	java edu.berkeley.nlp.PCFGLA.GrammarTester \
-		-in /tmp/bp/grammar \
-		-path <(head -n 100 /home/sjm/documents/Uni/FuzzySP/spmrl-2014/data/GERMAN_SPMRL/gold/ptb/dev/dev.German.gold.ptb) \
-		-treebank SINGLEFILE
+	for smoothing in nosmooth smooth; do
+		java \
+			edu.berkeley.nlp.PCFGLA.BerkeleyParser \
+			-gr /mnt/hylia/bp/${lang}.bpgrammar.${smoothing} \
+			< /home/sjm/documents/Uni/FuzzySP/pure-treebanks/${lang}.test.yield \
+			> /mnt/hylia/bp/${lang}.test.yield.bpparsed.${smoothing}
+		
+		/home/sjm/documents/Uni/FuzzySP/pcfg-experiments/evalb_spmrl2013.final/evalb_spmrl \
+			-L -X \
+			/home/sjm/documents/Uni/FuzzySP/pure-treebanks/${lang}.test.tb \
+			/mnt/hylia/bp/${lang}.test.yield.bpparsed.${smoothing} \
+			> /mnt/hylia/bp/${lang}.test.yield.bpparsed.${smoothing}.evalb
+	done
+
 }
 
 ########################## MAIN ############################
 
-# for lang in GERMAN KOREAN FRENCH ARABIC; do
-# 	morfize $lang
-# 	bpeize $lang
+for lang in ENGLISH; do
+	morfize $lang
+	bpeize $lang
 # 	brownize $lang 1000
 # 	brownize $lang 100
+done
+
+#brownize GERMAN 1000
+#brownize GERMAN 100
+#tune
+
+# for smcycles in 0 1 3 5; do
+# 	for lang in English German Korean French Arabic; do
+# 		berkeley-baseline $lang $smcycles
+# 	done
 # done
 
-brownize GERMAN 1000
-brownize GERMAN 100
-#tune
+# for lang in English German Korean French Arabic; do
+# 	evalall $lang
+# done
