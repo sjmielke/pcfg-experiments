@@ -213,6 +213,7 @@ fn main() {
         tau: 0.8,
         mu: 0.9,
         chi: 0.33333333,
+        testset: "dev".to_string(),
         all_terms_fallback: false,
         only_oovs_soft: false,
         exhaustive: false,
@@ -276,6 +277,9 @@ fn main() {
         ap.refer(&mut stats.chi)
             .add_option(&["--chi"], Store,
             "Hyperparameter chi (default: 0.33333333)");
+        ap.refer(&mut stats.testset)
+            .add_option(&["--testset"], Store,
+            "Set the test set ∈ {dev, test}");
         ap.refer(&mut stats.dualmono_pad)
             .add_option(&["--dualmono-pad"], StoreTrue,
             "grams = windows(###word) ∪ windows(word###) - instead of the standard grams = windows(###word###)");

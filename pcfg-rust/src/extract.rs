@@ -359,20 +359,20 @@ pub fn get_data(wsj_path: &str, spmrl_path: &str, stats: &mut PCFGParsingStatist
     
     let (train_trees, test_trees) = if lang == "ENGLISH" {
         let train = ptb_reader::parse_ptb_sections(wsj_path, (2..22).collect()); // sections 2-21
-        let  test = ptb_reader::parse_ptb_sections(wsj_path, vec![22]); // section 22
+        let  test = ptb_reader::parse_ptb_sections(wsj_path, if stats.testset == "dev" {vec![22]} else {if &stats.testset == "test" {vec![23]} else {panic!("Illegal testset »{}«", &stats.testset)}}); // section 22 or 23
         (train, test)
     } else {
         let mut camellang = lang.chars().next().unwrap().to_string();
         camellang += &lang.to_lowercase()[1..];
         let alltrain_prefix = spmrl_path.to_string() + "/" + &lang + "_SPMRL/gold/ptb/train/train.";
         let train_5k_prefix = spmrl_path.to_string() + "/" + &lang + "_SPMRL/gold/ptb/train5k/train5k.";
-        let testfile_prefix = spmrl_path.to_string() + "/" + &lang + "_SPMRL/gold/ptb/dev/dev.";
+        let testfile_prefix = spmrl_path.to_string() + "/" + &lang + &format!("_SPMRL/gold/ptb/{}/{}.", &stats.testset, &stats.testset);
         
         let train = match read_bracketinginsensitive(&alltrain_prefix, &camellang, stats) {
             Ok(t) => t,
             Err(_) => read_bracketinginsensitive(&train_5k_prefix, &camellang, stats).expect(&format!("Din't find {} train!", lang))
         };
-        (train, read_bracketinginsensitive(&testfile_prefix, &camellang, stats).expect(&format!("Didn't find {} dev!", lang)))
+        (train, read_bracketinginsensitive(&testfile_prefix, &camellang, stats).expect(&format!("Didn't find {} testset!", lang)))
     };
     
     let (unb_rules, unb_ntdict, initial_nts, pret_distr_all, pret_distr_le3, wordcounts) = crunch_train_trees(train_trees, &stats);
@@ -408,9 +408,11 @@ pub fn get_data(wsj_path: &str, spmrl_path: &str, stats: &mut PCFGParsingStatist
         "SWEDISH" => 494,
         _ => unreachable!()
     };
-    assert_eq!(testsents.len(), intended_ts_len);
-    assert_eq!(testposs.len(), intended_ts_len);
-    assert_eq!(testtrees.len(), intended_ts_len);
+    if stats.testset == "dev" {
+        assert_eq!(testsents.len(), intended_ts_len);
+        assert_eq!(testposs.len(), intended_ts_len);
+        assert_eq!(testtrees.len(), intended_ts_len);
+    }
     
     let (bin_rules, bin_ntdict) = binarize_grammar(&unb_rules, &unb_ntdict);
     
