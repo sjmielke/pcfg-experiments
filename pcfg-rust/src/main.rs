@@ -224,19 +224,19 @@ fn main() {
     
     { // this block limits scope of borrows by ap.refer() method
         let mut ap = ArgumentParser::new();
-        ap.set_description("PCFG parsing");
+        ap.set_description("PCFG extraction, parsing, and evaluation, non-soft and soft alike.\nAccompanying the masters thesis \"Soft matching of terminals for syntactic parsing\", Sebastian J. Mielke (2017).");
         ap.refer(&mut stats.trainsize)
             .add_option(&["--trainsize"], Store,
-            "Number of training sentences from sections 2-21");
+            "Number of training sentences to use");
         ap.refer(&mut stats.oov_handling)
             .add_option(&["--oovhandling"], Store,
-            "OOV->POS handling: Zero (default), Uniform or Marginal");
-        ap.refer(&mut stats.uniform_oov_prob)
-            .add_option(&["--oovuniformlogprob"], Store,
-            "Value for uniform OOV preterminal assignment");
+            "OOV->POS handling: zero (non-soft), uniform, marginal-all, or marginal-le3");
+        // ap.refer(&mut stats.uniform_oov_prob)
+        //     .add_option(&["--oovuniformlogprob"], Store,
+        //     "Value for uniform OOV preterminal assignment");
         ap.refer(&mut stats.feature_structures)
             .add_option(&["--featurestructures"], Store,
-            "Feature structures: exactmatch (default), postagsonly, lcsratio, prefixsuffix, ngrams, levenshtein");
+            "Feature structures: exactmatch (default), postagsonly, lcsratio, prefixsuffix, levenshtein, ngrams, freq-cont, affixdice");
         ap.refer(&mut stats.testtagsfile)
             .add_option(&["--testtagsfile"], Store,
             "POS tags of the test tag file, if parsing with --featurestructures=postagsonly");
@@ -248,13 +248,13 @@ fn main() {
             "${morftagfileprefix}.${uppercase-language}.vocab{,.flatcatized}.txt are used when parsing on morphs. They contain a word and its analysis (#-sep) on each line, respectively.");
         ap.refer(&mut stats.nbesttags)
             .add_option(&["--nbesttags"], Store,
-            "Parse with 1) the argmax tag (1besttags, default) 2) all possible tags and their tagger weights (nbesttags) (n/a for gold, duh) or 3) the argmax tag with weight mu and all others with weight (1-mu)/(|N|-1) (faux-nbesttags)");
+            "Parse with 1) the argmax tag (1besttags, default) 2) all possible tags and their tagger weights (nbesttags) (n/a for gold, duh) or 3) the argmax tag with weight mu and all others with weight (1-mu)/(|Tags|-1) (faux-nbesttags)");
         ap.refer(&mut stats.keepafterdash)
             .add_option(&["--keepafterdash"], StoreTrue,
-            "Keep everything after a - from SPMRL NTs (e.g., NP-SBJ instead of NP)");
+            "Keep everything after a '-' from SPMRL NTs (e.g., NP-SBJ instead of NP)");
         ap.refer(&mut stats.eta)
             .add_option(&["--eta"], Store,
-            "Softness factor (default: 0.06)");
+            "Hyperparameter eta (default: 0.06)");
         ap.refer(&mut stats.alpha)
             .add_option(&["--alpha"], Store,
             "Hyperparameter alpha (default: 0.2)");
@@ -278,7 +278,7 @@ fn main() {
             "Hyperparameter chi (default: 0.33333333)");
         ap.refer(&mut stats.dualmono_pad)
             .add_option(&["--dualmono-pad"], StoreTrue,
-            "grams = window(###word) ∪ window(word###) - instead of the standard grams = window(###word###)");
+            "grams = windows(###word) ∪ windows(word###) - instead of the standard grams = windows(###word###)");
         ap.refer(&mut stats.logcompvalues)
             .add_option(&["--logcompvalues"], StoreTrue,
             "write binned comp value statistics at the end of parsing (caution: very slow!)");
@@ -287,7 +287,7 @@ fn main() {
             "Allows OOV-like treatment to all terms as fallback");
         ap.refer(&mut stats.only_oovs_soft)
             .add_option(&["--only-oovs-soft"], StoreTrue,
-            "(set eta = 0.0)");
+            "Only uses soft matching for OOVs and non-soft matching for known words");
         ap.refer(&mut stats.exhaustive)
             .add_option(&["--exhaustive"], StoreTrue,
             "Forces exhaustive search for all parses");
