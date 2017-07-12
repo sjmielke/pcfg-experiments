@@ -4,7 +4,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import classification_report
 
 #for (luc, llc) in [("ENGLISH", "English"), ("GERMAN", "German"), ("KOREAN", "Korean"), ("ARABIC", "Arabic"), ("FRENCH", "French")]:
-for (luc, llc) in [("KOREAN", "Korean"), ("ARABIC", "Arabic"), ("FRENCH", "French")]:
+for (luc, llc) in [("ARABIC", "Arabic"), ("FRENCH", "French")]:
 
     outpref = "/home/sjm/documents/Uni/FuzzySP/pcfg-experiments/pos-tagging/data/spmrl.{}.".format(luc)
     pref = "/home/sjm/documents/Uni/FuzzySP/pure-treebanks/{}.".format(llc)
@@ -78,7 +78,7 @@ for (luc, llc) in [("KOREAN", "Korean"), ("ARABIC", "Arabic"), ("FRENCH", "Frenc
         return bests, outline
 
     #for n in [10, 50, 100, 500, 1000, 5000, 10000, 20000, 39000]:
-    for n in [100, 500, 1000, 10000, 40472]:
+    for n in [40472]:
         print(f"n = {n}")
 
         # Train classifier

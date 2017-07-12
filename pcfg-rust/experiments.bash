@@ -287,7 +287,7 @@ morfessor-my-segment() {
 		<(sed 's/^/Source             : /;s/$/\nDELMEDELMEDELME/' "$INCOMING") \
 		<(sed 's/^/morf-Source-flat   : /;s/$/\n/;s/#/|/g'        "$OUTGOING") \
 		| sed '/DELMEDELMEDELME/d' \
-		| head -n 100
+		| head -n 100 \
 		> "$OUTGOING.100.viz"
 }
 
@@ -410,16 +410,16 @@ berkeley-baseline() {
 	
 	javac edu/berkeley/nlp/PCFGLA/*.java
 	
-	java \
-		edu.berkeley.nlp.PCFGLA.GrammarTrainer \
-		-path /home/sjm/documents/Uni/FuzzySP/pure-treebanks/${lang}.train.tb \
-		-out /mnt/hylia/bp/${lang}.bpgrammar.nosmooth \
-		-treebank SINGLEFILE \
-		-SMcycles ${smcycles} -sm1 0 -sm2 0
+	# java \
+	# 	edu.berkeley.nlp.PCFGLA.GrammarTrainer \
+	# 	-path <(head -n 10000 /home/sjm/documents/Uni/FuzzySP/pure-treebanks/${lang}.train.tb) \
+	# 	-out /mnt/hylia/bp/${lang}.bpgrammar.nosmooth \
+	# 	-treebank SINGLEFILE \
+	# 	-SMcycles ${smcycles} -sm1 0 -sm2 0
 	
 	java \
 		edu.berkeley.nlp.PCFGLA.GrammarTrainer \
-		-path /home/sjm/documents/Uni/FuzzySP/pure-treebanks/${lang}.train.tb \
+		-path <(head -n 10000 /home/sjm/documents/Uni/FuzzySP/pure-treebanks/${lang}.train.tb) \
 		-out /mnt/hylia/bp/${lang}.bpgrammar.smooth \
 		-treebank SINGLEFILE \
 		-SMcycles ${smcycles}
@@ -428,7 +428,8 @@ berkeley-baseline() {
 	
 	# java edu.berkeley.nlp.PCFGLA.BerkeleyParser -gr /tmp/bp/grammar -inputFile <(echo "Ich sah ein Objekt in der Ferne .")
 	
-	for smoothing in nosmooth smooth; do
+	#for smoothing in nosmooth smooth; do
+	for smoothing in smooth; do
 		java \
 			edu.berkeley.nlp.PCFGLA.BerkeleyParser \
 			-gr /mnt/hylia/bp/${lang}.bpgrammar.${smoothing} \
@@ -446,22 +447,22 @@ berkeley-baseline() {
 
 ########################## MAIN ############################
 
-for lang in ENGLISH; do
-	morfize $lang
-	bpeize $lang
-# 	brownize $lang 1000
-# 	brownize $lang 100
-done
+# for lang in ENGLISH; do
+# 	morfize $lang
+# 	bpeize $lang
+# # 	brownize $lang 1000
+# # 	brownize $lang 100
+# done
 
 #brownize GERMAN 1000
 #brownize GERMAN 100
 #tune
 
-# for smcycles in 0 1 3 5; do
-# 	for lang in English German Korean French Arabic; do
-# 		berkeley-baseline $lang $smcycles
-# 	done
-# done
+for smcycles in 0; do
+	for lang in English German Korean French Arabic; do
+		berkeley-baseline $lang $smcycles
+	done
+done
 
 # for lang in English German Korean French Arabic; do
 # 	evalall $lang

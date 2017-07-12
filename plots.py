@@ -238,6 +238,37 @@ def plot_max_on_dev():
         #legend_right = False
         ).savefig('/tmp/plots/dev_optimum_per_trainsize.pdf', format='pdf', dpi=dpi)
 
+def plot_alllangs_optimized():
+    def nicename(t):
+        if "brown" in t[2]:
+            return f"Brown ($\\nu$ = {t[1][27:-12]})"
+        elif t[2] == "":
+            return f"POS tags (1-best, gold)"
+        elif "../pos-tagging/data/spmrl." in t[2]:
+            return f"POS tags ($n$-best, predicted from tagger trained on whole training set)"
+        elif t[0] == "affixdice" and "morfessor" in t[3]:
+            return "AffixDice (Morfessor)"
+        elif t[0] == "affixdice" and "bpe" in t[3]:
+            return "Dice (BPE)"
+        else:
+            return f"{t[0]}"
+
+    multi_facet_plot(None,
+        filenames = [logroot + "/alllangs_07-13_optimized.log"],
+        series_names = ['feature_structures', 'nbesttags', 'testtagsfile', 'morftagfileprefix'],
+        columnmapper = nicename,
+        legend_title = "embedding",
+        x_name = 'trainsize',
+        x_title = 'trainsize',
+        facet_name = 'language',
+        facets = ["English","German","Arabic","French","Korean"],
+        nrows = 1,
+        ywindow_size = 20,
+        ywindow_mid = lambda _b, _t: 60,
+        #legend_right = False
+        ).savefig('/tmp/plots/alllangs_optimized_on_dev_all_trainsizes.pdf', format='pdf', dpi=dpi)
+
+def plot_baselines():
     multi_facet_plot(None,
         # Add levenshtien portion back in from [logroot + "/german_megatune.log", logroot + "/german_apocalypsetune_coarse.log"]
     	filenames = [logroot + "/german_06-27_baselines.log"],
@@ -596,13 +627,15 @@ def plot_all_40472():
 
 # Calling!
 
+# plot_baselines()
+# plot_max_on_dev()
+plot_alllangs_optimized()
 # plot_pos()
 plot_brown()
-# plot_freq_cont()
+plot_freq_cont()
 # plot_lcs()
 # plot_cpcs()
 # plot_levenshtein()
 # plot_ngrams()
 # plot_affixdice()
-plot_max_on_dev()
 #plot_all_40472()
