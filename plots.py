@@ -133,7 +133,7 @@ def multi_facet_plot(
             xsize, ysize = 5, 3.75
     
     xsize = xsize * scale # * 1.5
-    ysize = ysize * scale
+    ysize = ysize * scale * 1.3
     
     fig, ax = plt.subplots(nrows, ncols, squeeze=False, figsize=(xsize, ysize)) #, sharex=True) #, sharey=True)
 
@@ -177,8 +177,10 @@ def multi_facet_plot(
                 for (series, marker) in zip(plot_df.columns, itertools.cycle(markers)):
                     plot_df[series].plot(ax=ax[j][i], marker=marker, markersize=3)
             
-            if x_name in ['eta', 'kappa', 'trainsize']:
+            if x_name in ['eta', 'kappa']:
                 ax[j][i].set_xscale('symlog', linthreshx=0.001, linscalex=0.35)
+            if x_name in ['trainsize']:
+                ax[j][i].set_xscale('log')
             
             if x_name == 'kappa':
                 ax[j][i].set_xticks([1,2,3,4,5,10])
@@ -240,32 +242,35 @@ def plot_max_on_dev():
 
 def plot_alllangs_optimized():
     def nicename(t):
-        if "brown" in t[2]:
-            return f"Brown ($\\nu$ = {t[1][27:-12]})"
-        elif t[2] == "":
-            return f"POS tags (1-best, gold)"
-        elif "../pos-tagging/data/spmrl." in t[2]:
-            return f"POS tags ($n$-best, predicted from tagger trained on whole training set)"
-        elif t[0] == "affixdice" and "morfessor" in t[3]:
+        if t[0] == "affixdice" and "morfessor" in t[3]:
             return "AffixDice (Morfessor)"
-        elif t[0] == "affixdice" and "bpe" in t[3]:
+        if t[0] == "affixdice" and "bpe" in t[3]:
             return "Dice (BPE)"
-        else:
-            return f"{t[0]}"
+        
+        if t[0] == "postagsonly" and isinstance(t[2], str):
+            if "brown" in t[2]:
+                return f"Brown ($\\nu$ = {t[2][27:-12]})"
+            if "../pos-tagging/data/spmrl." in t[2]:
+                return f"POS tags ($n$-best, predicted from tagger trained on whole training set)"
+            if t[2] == ".":
+                return f"POS tags (1-best, gold)"
+
+        return f"{t[0]}"
 
     multi_facet_plot(None,
-        filenames = [logroot + "/alllangs_07-13_optimized.log"],
+        filenames = [logroot + "/alllangs_07-13_optimalmethods_nonan.log"],
         series_names = ['feature_structures', 'nbesttags', 'testtagsfile', 'morftagfileprefix'],
         columnmapper = nicename,
         legend_title = "embedding",
         x_name = 'trainsize',
         x_title = 'trainsize',
         facet_name = 'language',
+        #facets = ["English"],
         facets = ["English","German","Arabic","French","Korean"],
         nrows = 1,
-        ywindow_size = 20,
-        ywindow_mid = lambda _b, _t: 60,
-        #legend_right = False
+        legend_right = False,
+        legend_ncols = 5,
+        legend_extraspace = 0.1,
         ).savefig('/tmp/plots/alllangs_optimized_on_dev_all_trainsizes.pdf', format='pdf', dpi=dpi)
 
 def plot_baselines():
@@ -631,8 +636,8 @@ def plot_all_40472():
 # plot_max_on_dev()
 plot_alllangs_optimized()
 # plot_pos()
-plot_brown()
-plot_freq_cont()
+###plot_brown()
+###plot_freq_cont()
 # plot_lcs()
 # plot_cpcs()
 # plot_levenshtein()

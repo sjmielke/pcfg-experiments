@@ -417,12 +417,12 @@ berkeley-baseline() {
 	# 	-treebank SINGLEFILE \
 	# 	-SMcycles ${smcycles} -sm1 0 -sm2 0
 	
-	java \
-		edu.berkeley.nlp.PCFGLA.GrammarTrainer \
-		-path <(head -n 10000 /home/sjm/documents/Uni/FuzzySP/pure-treebanks/${lang}.train.tb) \
-		-out /mnt/hylia/bp/${lang}.bpgrammar.smooth \
-		-treebank SINGLEFILE \
-		-SMcycles ${smcycles}
+	# java \
+	# 	edu.berkeley.nlp.PCFGLA.GrammarTrainer \
+	# 	-path <(head -n 10000 /home/sjm/documents/Uni/FuzzySP/pure-treebanks/${lang}.train.tb) \
+	# 	-out /mnt/hylia/bp/${lang}.bpgrammar.smooth \
+	# 	-treebank SINGLEFILE \
+	# 	-SMcycles ${smcycles}
 	
 	# java edu.berkeley.nlp.PCFGLA.WriteGrammarToTextFile /tmp/bp/grammar /tmp/bp/grammar
 	
@@ -433,14 +433,14 @@ berkeley-baseline() {
 		java \
 			edu.berkeley.nlp.PCFGLA.BerkeleyParser \
 			-gr /mnt/hylia/bp/${lang}.bpgrammar.${smoothing} \
-			< /home/sjm/documents/Uni/FuzzySP/pure-treebanks/${lang}.test.yield \
-			> /mnt/hylia/bp/${lang}.test.yield.bpparsed.${smoothing}
+			< /home/sjm/documents/Uni/FuzzySP/pure-treebanks/${lang}.dev.yield \
+			> /mnt/hylia/bp/${lang}.dev.yield.bpparsed.${smoothing}
 		
 		/home/sjm/documents/Uni/FuzzySP/pcfg-experiments/evalb_spmrl2013.final/evalb_spmrl \
 			-L -X \
-			/home/sjm/documents/Uni/FuzzySP/pure-treebanks/${lang}.test.tb \
-			/mnt/hylia/bp/${lang}.test.yield.bpparsed.${smoothing} \
-			> /mnt/hylia/bp/${lang}.test.yield.bpparsed.${smoothing}.evalb
+			/home/sjm/documents/Uni/FuzzySP/pure-treebanks/${lang}.dev.tb \
+			/mnt/hylia/bp/${lang}.dev.yield.bpparsed.${smoothing} \
+			> /mnt/hylia/bp/${lang}.dev.yield.bpparsed.${smoothing}.evalb
 	done
 
 }
@@ -454,8 +454,8 @@ berkeley-baseline() {
 # # 	brownize $lang 100
 # done
 
-#brownize GERMAN 1000
-#brownize GERMAN 100
+# brownize ENGLISH 1000
+# brownize ENGLISH 100
 #tune
 
 for smcycles in 0; do

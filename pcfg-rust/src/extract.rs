@@ -227,11 +227,10 @@ pub fn crunch_test_trees(read_devtrees: Vec<PTBTree>, stats: &PCFGParsingStatist
         if stats.language.to_uppercase() == "ENGLISH" {
             t.strip_all_predicate_annotations()
         }
-        if stats.language.to_uppercase() != "ENGLISH" || t.front_length() <= 40 {
-            devsents.push(t.front());
-            devposs.push(t.pos_front());
-            devtrees.push(t);
-        }
+        
+        devsents.push(t.front());
+        devposs.push(t.pos_front());
+        devtrees.push(t);
     }
     //println!("From {} candidates we took {} dev sentences (max length {})!", read_devtrees.len(), devtrees.len(), stats.testmaxlen);
     
@@ -309,11 +308,15 @@ pub fn read_morfdictfile(filename_prefix: &str, uppercase_language: &str) -> Has
                 panic!("Null segment encountered in »{}«!", fc)
             }
             if ss != "" {
-                let pair = ss.split('#').collect::<Vec<&str>>();
-                if pair.len() != 2 {
-                    panic!("faulty pair: »{}« and »{}« at segment »{}« ~> »{:?}«", w, fc, ss, pair)
+                if ss == "##STM" { // English exception
+                    sgms.insert(("#".to_string(), ::std::str::FromStr::from_str("STM").unwrap()));
+                } else {
+                    let pair = ss.split('#').collect::<Vec<&str>>();
+                    if pair.len() != 2 {
+                        panic!("faulty pair: »{}« and »{}« at segment »{}« ~> »{:?}«", w, fc, ss, pair)
+                    }
+                    sgms.insert((pair[0].to_string(), ::std::str::FromStr::from_str(pair[1]).unwrap()));
                 }
-                sgms.insert((pair[0].to_string(), ::std::str::FromStr::from_str(pair[1]).unwrap()));
             } else {
                 done = true
             }
@@ -389,14 +392,14 @@ pub fn get_data(wsj_path: &str, spmrl_path: &str, stats: &mut PCFGParsingStatist
         None
     };
     
-    if lang == "ENGLISH" {
-        testsents.truncate(500);
-        testposs.truncate(500);
-        testtrees.truncate(500)
-    }
+    // if lang == "ENGLISH" {
+    //     testsents.truncate(500);
+    //     testposs.truncate(500);
+    //     testtrees.truncate(500)
+    // }
     
     let intended_ts_len = match lang.as_ref() {
-        "ENGLISH" => 500,
+        "ENGLISH" => 1700,
         "GERMAN" => 5000,
         "KOREAN" => 2066,
         "ARABIC" => 1985,

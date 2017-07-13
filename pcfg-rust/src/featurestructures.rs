@@ -280,11 +280,6 @@ impl IsEmbedding for LevenshteinEmbedder {
             (
                 (strsim::levenshtein(wsent, wrule) as f64)
                 /
-                (self.alpha * (lrule as f64) + (1.0 - self.alpha) * (lsent as f64))
-            ) *
-            (
-                (::std::cmp::min(lrule, lsent) as f64)
-                /
                 (::std::cmp::max(lrule, lsent) as f64)
             )
         )

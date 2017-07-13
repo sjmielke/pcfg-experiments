@@ -200,6 +200,12 @@ pub fn agenda_cky_parse<'a>(
         let sent: Vec<&str> = raw_sent.split(' ').collect();
         let sentlen = sent.len();
         
+        // To make Arabic bearable
+        if sentlen > 250 {
+            results.push(HashMap::new());
+            continue
+        }
+        
         // score and left and right predecessors in compact notation
         let chartlength = chart_adr(sentlen, ntcount, (sentlen-1), sentlen, ntcount) + 1;
         let mut ckychart: Vec<(f64, usize, usize)> = Vec::with_capacity(chartlength);
