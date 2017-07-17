@@ -249,27 +249,27 @@ def plot_alllangs_optimized():
         
         if t[0] == "postagsonly" and isinstance(t[2], str):
             if "brown" in t[2]:
-                return f"Brown ($\\nu$ = {t[2][27:-12]})"
+                nu = t[2].split('.dev.c')[1].split('.')[0]
+                return f"Brown ($\\nu$ = {nu})"
             if "../pos-tagging/data/spmrl." in t[2]:
-                return f"POS tags ($n$-best, predicted from tagger trained on whole training set)"
+                return f"POS tags ($n$-best, tagger from whole training set)"
             if t[2] == ".":
                 return f"POS tags (1-best, gold)"
 
         return f"{t[0]}"
 
     multi_facet_plot(None,
-        filenames = [logroot + "/alllangs_07-13_optimalmethods_nonan.log"],
+        filenames = [logroot + "/alllangs_07-13_optimalmethods_handfixed_nonan.log"],
         series_names = ['feature_structures', 'nbesttags', 'testtagsfile', 'morftagfileprefix'],
         columnmapper = nicename,
         legend_title = "embedding",
         x_name = 'trainsize',
         x_title = 'trainsize',
         facet_name = 'language',
-        #facets = ["English"],
         facets = ["English","German","Arabic","French","Korean"],
         nrows = 1,
         legend_right = False,
-        legend_ncols = 5,
+        legend_ncols = 4,
         legend_extraspace = 0.1,
         ).savefig('/tmp/plots/alllangs_optimized_on_dev_all_trainsizes.pdf', format='pdf', dpi=dpi)
 

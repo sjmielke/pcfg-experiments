@@ -4,7 +4,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import classification_report
 
 #for (luc, llc) in [("ENGLISH", "English"), ("GERMAN", "German"), ("KOREAN", "Korean"), ("ARABIC", "Arabic"), ("FRENCH", "French")]:
-for (luc, llc) in [("FRENCH", "French"), ("KOREAN", "Korean")]:
+for (luc, llc) in [("ARABIC", "Arabic")]:
 
     outpref = "/home/sjm/documents/Uni/FuzzySP/pcfg-experiments/pos-tagging/data/spmrl.{}.".format(luc)
     pref = "/home/sjm/documents/Uni/FuzzySP/pure-treebanks/{}.".format(llc)

@@ -33,7 +33,7 @@ fn parsetree2ptbtree(ntdict: &HashMap<NT, String>, t: &ParseTree) -> PTBTree {
     }
 }
 
-fn debinarize_parsetree<'a>(ntdict: &HashMap<NT, String>, t: &ParseTree<'a>) -> ParseTree<'a> {
+fn debinarize_parsetree<'a>(ntdict: &HashMap<NT, String>, t: &ParseTree<'a>, unbin_nts: usize) -> ParseTree<'a> {
     match *t {
         ParseTree::TerminalNode { label } => ParseTree::TerminalNode { label },
         ParseTree::InnerNode { label, ref children } => {
@@ -45,10 +45,10 @@ fn debinarize_parsetree<'a>(ntdict: &HashMap<NT, String>, t: &ParseTree<'a>) -> 
             for c in children {
                 match *c {
                     ParseTree::InnerNode { label, .. } => {
-                        if ntdict[&label].chars().next().unwrap() == '_' {
+                        if label <= unbin_nts {
                             // So this would be _NNP_VB_NN(NNP _VB_NN(VB(VBD..) NN))).
                             // It has be debinarized first!
-                            let newchild = debinarize_parsetree(ntdict, c);
+                            let newchild = debinarize_parsetree(ntdict, c, unbin_nts);
                             // Now we have _NNP_VB_NN(NNP VB(VBD..) NN), so just take its children!
                             if let ParseTree::InnerNode { children, .. } = newchild {
                                 newchildren.extend(children)
@@ -56,10 +56,10 @@ fn debinarize_parsetree<'a>(ntdict: &HashMap<NT, String>, t: &ParseTree<'a>) -> 
                                 unreachable!()
                             }
                         } else {
-                            newchildren.push(debinarize_parsetree(ntdict, c))
+                            newchildren.push(debinarize_parsetree(ntdict, c, unbin_nts))
                         }
                     }
-                    _ => newchildren.push(debinarize_parsetree(ntdict, c))
+                    _ => newchildren.push(debinarize_parsetree(ntdict, c, unbin_nts))
                 }
             }
             ParseTree::InnerNode { label, children: newchildren }
@@ -68,7 +68,7 @@ fn debinarize_parsetree<'a>(ntdict: &HashMap<NT, String>, t: &ParseTree<'a>) -> 
 }
 
 #[allow(dead_code)]
-fn print_example(bin_ntdict: &HashMap<NT, String>, sent: &str, tree: &PTBTree, sorted_candidates: &[(NT, (f64, ParseTree))]) {
+fn print_example(bin_ntdict: &HashMap<NT, String>, sent: &str, tree: &PTBTree, sorted_candidates: &[(NT, (f64, ParseTree))], unbin_nts: usize) {
     if !sorted_candidates.is_empty() {
         println!("{}", sent);
         let mut got_s = false;
@@ -76,7 +76,7 @@ fn print_example(bin_ntdict: &HashMap<NT, String>, sent: &str, tree: &PTBTree, s
         println!("  {:28} -> {}", "", tree);
         // Algo
         for &(ref n, (p, ref ptree)) in sorted_candidates.iter().take(10) {
-            println!("  {:10} ({:4.10}) -> {}", bin_ntdict[n], p, parsetree2ptbtree(bin_ntdict, &debinarize_parsetree(bin_ntdict, ptree)));
+            println!("  {:10} ({:4.10}) -> {}", bin_ntdict[n], p, parsetree2ptbtree(bin_ntdict, &debinarize_parsetree(bin_ntdict, ptree, unbin_nts)));
             if bin_ntdict[n] == "S" {
                 got_s = true
             }
@@ -86,7 +86,7 @@ fn print_example(bin_ntdict: &HashMap<NT, String>, sent: &str, tree: &PTBTree, s
             if !got_s {
                 for &(ref n, (p, ref ptree)) in sorted_candidates {
                     if bin_ntdict[n] == "S" {
-                        println!("  {:10} ({:4.10}) -> {}", bin_ntdict[n], p, parsetree2ptbtree(bin_ntdict, &debinarize_parsetree(bin_ntdict, ptree)))
+                        println!("  {:10} ({:4.10}) -> {}", bin_ntdict[n], p, parsetree2ptbtree(bin_ntdict, &debinarize_parsetree(bin_ntdict, ptree, unbin_nts)))
                     }
                 }
             }
@@ -97,14 +97,14 @@ fn print_example(bin_ntdict: &HashMap<NT, String>, sent: &str, tree: &PTBTree, s
     }
 }
 
-fn debinarize_and_sort_candidates<'a>(cell: &HashMap<NT, (f64, ParseTree<'a>)>, bin_ntdict: &HashMap<NT, String>) -> Vec<(NT, (f64, ParseTree<'a>))> {
+fn debinarize_and_sort_candidates<'a>(cell: &HashMap<NT, (f64, ParseTree<'a>)>, bin_ntdict: &HashMap<NT, String>, unbin_nts: usize) -> Vec<(NT, (f64, ParseTree<'a>))> {
     // Remove binarization traces
     let mut candidates: Vec<(NT, (f64, ParseTree))> = Vec::new();
     for (nt, &(p, ref ptree)) in cell {
         // Only keep candidates ending in proper NTs
-        if bin_ntdict[nt].chars().next().unwrap() != '_' {
+        if *nt <= unbin_nts {
             // Remove inner binarization nodes
-            candidates.push((*nt, (p, debinarize_parsetree(&bin_ntdict, ptree))))
+            candidates.push((*nt, (p, debinarize_parsetree(&bin_ntdict, ptree, unbin_nts))))
         }
     }
     // Sort
@@ -182,7 +182,7 @@ fn extract_and_parse(wsj_path: &str, spmrl_path: &str, mut stats: &mut PCFGParsi
     let raw_parses = parse::agenda_cky_parse(&bin_rules, &bin_ntdict, &initial_nts, wordcounts, word2tag, morfdict, &testsents, &testposs, pret_distr_all, pret_distr_le3, &mut stats);
     let mut parses: Vec<Vec<(NT, (f64, PTBTree))>> = Vec::new();
     for cell in raw_parses {
-        let candidates = debinarize_and_sort_candidates(&cell, &bin_ntdict);
+        let candidates = debinarize_and_sort_candidates(&cell, &bin_ntdict, stats.unbin_nts);
         parses.push(candidates.into_iter().map(|(nt, res)| (nt, (res.0, parsetree2ptbtree(&bin_ntdict, &res.1)))).collect())
     }
     

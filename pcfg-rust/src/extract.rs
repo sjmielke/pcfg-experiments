@@ -140,7 +140,9 @@ pub fn crunch_train_trees(mut train_trees: Vec<PTBTree>, stats: &PCFGParsingStat
     }
     
     for ref mut t in &mut train_trees[0..stats.trainsize] {
-        t.strip_all_predicate_annotations();
+        if stats.language.to_uppercase() == "ENGLISH" {
+            t.strip_all_predicate_annotations()
+        }
         readoff_rules_into(t, &mut lhs_to_rhs_count, &mut rev_ntdict, Some(&mut initial_nts));
     }
     
