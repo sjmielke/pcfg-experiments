@@ -419,6 +419,10 @@ pub fn get_data(wsj_path: &str, spmrl_path: &str, stats: &mut PCFGParsingStatist
         assert_eq!(testtrees.len(), intended_ts_len);
     }
     
+    // testsents.truncate(1);
+    // testposs.truncate(1);
+    // testtrees.truncate(1);
+    
     let (bin_rules, bin_ntdict) = binarize_grammar(&unb_rules, &unb_ntdict);
     
     stats.unbin_nts = unb_ntdict.len();

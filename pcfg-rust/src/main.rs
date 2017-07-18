@@ -45,7 +45,7 @@ fn debinarize_parsetree<'a>(ntdict: &HashMap<NT, String>, t: &ParseTree<'a>, unb
             for c in children {
                 match *c {
                     ParseTree::InnerNode { label, .. } => {
-                        if label <= unbin_nts {
+                        if label > unbin_nts {
                             // So this would be _NNP_VB_NN(NNP _VB_NN(VB(VBD..) NN))).
                             // It has be debinarized first!
                             let newchild = debinarize_parsetree(ntdict, c, unbin_nts);
